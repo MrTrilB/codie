@@ -1,4 +1,5 @@
 "use strict";
+// Minimal Mocha test suite for VS Code extension
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -32,11 +33,35 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerTests = registerTests;
 const assert = __importStar(require("assert"));
-describe('Sample Test Suite', () => {
-    it('should pass a simple test', () => {
-        assert.strictEqual(1 + 1, 2);
-    });
-});
-//# sourceMappingURL=extension.test.js.map
+const vscode = __importStar(require("vscode"));
+const mocha_1 = __importDefault(require("mocha"));
+function registerTests(mocha) {
+    const suite = mocha_1.default.Suite.create(mocha.suite, 'Codie Extension');
+    suite.addTest(new mocha_1.default.Test('should be present', function () {
+        console.log('Running test: should be present');
+        const extension = vscode.extensions.getExtension('mrtrilb.codie');
+        assert.ok(extension, 'Extension should be present');
+    }));
+    suite.addTest(new mocha_1.default.Test('should activate', function (done) {
+        console.log('Running test: should activate');
+        const extension = vscode.extensions.getExtension('mrtrilb.codie');
+        if (extension) {
+            extension.activate().then(() => {
+                assert.ok(extension.isActive, 'Extension should be active after activation');
+                done();
+            }, err => {
+                done(err);
+            });
+        }
+        else {
+            done(new Error('Extension not found'));
+        }
+    }));
+}
+//# sourceMappingURL=index.js.map

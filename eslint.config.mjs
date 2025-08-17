@@ -1,28 +1,27 @@
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
-
-export default [{
-    files: ["**/*.ts"],
-}, {
-    plugins: {
-        "@typescript-eslint": typescriptEslint,
-    },
-
+// Minimal ESLint config for VS Code extension (ESLint v9+)
+const tsEslintPlugin = (await import('@typescript-eslint/eslint-plugin')).default;
+const tsEslintParser = (await import('@typescript-eslint/parser')).default;
+export default [
+  {
+    ignores: [
+      'out/**',
+      'media/**',
+      '.vscode-test/**'
+    ],
+    files: ['**/*.ts'],
     languageOptions: {
-        parser: tsParser,
+      parser: tsEslintParser,
+      parserOptions: {
+        project: './tsconfig.json',
+        sourceType: 'module',
         ecmaVersion: 2022,
-        sourceType: "module",
+      },
     },
-
+    plugins: {
+      '@typescript-eslint': tsEslintPlugin,
+    },
     rules: {
-        "@typescript-eslint/naming-convention": ["warn", {
-            selector: "import",
-            format: ["camelCase", "PascalCase"],
-        }],
-
-        curly: "warn",
-        eqeqeq: "warn",
-        "no-throw-literal": "warn",
-        semi: "warn",
+      // Add or override rules as needed
     },
-}];
+  },
+];
