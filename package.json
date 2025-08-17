@@ -24,7 +24,24 @@
         "command": "codie.openChat",
         "title": "Open Codie Chat"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codie-activitybar",
+          "title": "Codie",
+          "icon": "media/icon-activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "codie-activitybar": [
+        {
+          "id": "codie-chat-view",
+          "name": "Codie Chat"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
