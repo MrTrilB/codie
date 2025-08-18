@@ -79,39 +79,38 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
       <body>
         <div class="codie-chat-container">
           <header class="codie-chat-header">
-            <img src="${codieLogoUri}" alt="Codie Logo" class="codie-logo" />
-            <span class="codie-title">Codie</span>
+            <img src="${codieLogoUri}" alt="Codie Logo" class="codie-logo" style="width:20%;display:block;margin:0 auto;" />
           </header>
           <main class="codie-chat-main">
             <div class="codie-chat-area-shell">
               <div id="codie-chat-messages" class="codie-chat-messages"></div>
               <footer class="codie-chat-footer">
                 <div class="codie-footer-content">
-                  <div class="codie-attachments">
-                    <button class="codie-attach-btn" title="Attach file or context" aria-label="Attach file or context">
-                      <span class="codicon codicon-attach"></span>
-                    </button>
-                    <!-- Future: show attached files here -->
-                  </div>
                   <form class="codie-input-form" autocomplete="off">
                     <div class="codie-input-row codie-input-row-top">
-                      <button class="codie-attach-btn" title="Attach file or context" aria-label="Attach file or context" type="button">
-                        <span class="codicon codicon-attach"></span>
+                      <button class="codie-attach-btn" title="Add Context" aria-label="Add Context" type="button" style="display: flex; align-items: center; min-width: 110px; padding: 0.2em 0.7em;">
+                        <span class="codicon codicon-folder" style="font-size: 16px;"></span>
+                        <span style="margin-left:0.4em; font-size:7px;">Add Context...</span>
+                      </button>
+                      <div class="codie-attached-items"></div>
+                    </div>
+                    <textarea class="codie-input" placeholder="Type your message..." aria-label="Chat input" rows="2"></textarea>
+                    <div class="codie-input-row codie-input-row-bottom">
+                      <button class="codie-toolbar-btn" title="Model Picker" aria-label="Model Picker" type="button">
+                        <span class="codicon codicon-symbol-parameter"></span>
                       </button>
                       <button class="codie-toolbar-btn" title="Agent Mode" aria-label="Agent Mode" type="button">
                         <span class="codicon codicon-person"></span>
                       </button>
-                      <button class="codie-toolbar-btn" title="Model Picker" aria-label="Model Picker" type="button">
-                        <span class="codicon codicon-symbol-parameter"></span>
-                      </button>
-                    </div>
-                    <textarea class="codie-input" placeholder="Type your message..." aria-label="Chat input" rows="2"></textarea>
-                    <div class="codie-input-row codie-input-row-bottom">
-                      <button class="codie-send-btn" type="submit" aria-label="Send">
-                        <span class="codicon codicon-send"></span>
-                      </button>
+                      <span style="flex:1 1 auto;"></span>
                       <button class="codie-toolbar-btn" title="Voice Chat" aria-label="Voice Chat" type="button">
                         <span class="codicon codicon-mic"></span>
+                      </button>
+                      <button class="codie-toolbar-btn" title="Tools" aria-label="Tools" type="button">
+                        <span class="codicon codicon-tools"></span>
+                      </button>
+                      <button class="codie-send-btn" type="submit" aria-label="Send">
+                        <span class="codicon codicon-send"></span>
                       </button>
                     </div>
                   </form>
