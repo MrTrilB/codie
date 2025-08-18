@@ -1,7 +1,0 @@
-{
-  "spec": ["out/test/suite/index.js"],
-  "require": ["source-map-support/register"],
-  "timeout": 10000,
-  "ui": "bdd",
-  "color": true
-}

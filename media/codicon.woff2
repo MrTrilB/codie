@@ -1,2 +1,0 @@
-// Codicon font for VS Code icons. This file is required for icon rendering in the chat UI.
-// Please copy the actual binary content of codicon.woff2 from node_modules/@vscode/codicons/dist/codicon.woff2 into this file.
