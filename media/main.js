@@ -44,19 +44,32 @@
     if (!text) return;
     appendMessage(text, 'user');
     chatInput.value = '';
+    chatInput.style.height = 'auto';
     // Simulate bot response (stub)
     setTimeout(() => {
       appendMessage('This is a stubbed response. (AI coming soon!)', 'bot');
     }, 500);
   }
 
+
   chatSend.addEventListener('click', sendMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      sendMessage();
+      if (!e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+      // If Shift+Enter, allow default (newline)
     }
+  });
+
+  // Auto-grow textarea height
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = chatInput.scrollHeight + 'px';
   });
 
   // Focus input on load
   chatInput.focus();
+  chatInput.style.height = 'auto';
 })();

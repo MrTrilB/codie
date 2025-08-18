@@ -1,0 +1,13 @@
+{
+	"files.exclude": {
+		"out": false,
+		"dist": false,
+		"**/context": true
+	},
+	"search.exclude": {
+		"out": true,
+		"dist": true,
+		"**/context": true
+	},
+	"typescript.tsc.autoDetect": "off"
+}
