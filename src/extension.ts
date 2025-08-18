@@ -94,22 +94,23 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
                     <!-- Future: show attached files here -->
                   </div>
                   <form class="codie-input-form" autocomplete="off">
-                    <input class="codie-input" type="text" placeholder="Type your message..." aria-label="Chat input" />
+                    <button class="codie-attach-btn" title="Attach file or context" aria-label="Attach file or context" type="button">
+                      <span class="codicon codicon-attach"></span>
+                    </button>
+                    <textarea class="codie-input" placeholder="Type your message..." aria-label="Chat input" rows="2"></textarea>
                     <button class="codie-send-btn" type="submit" aria-label="Send">
                       <span class="codicon codicon-send"></span>
                     </button>
-                  </form>
-                  <div class="codie-toolbar">
-                    <button class="codie-toolbar-btn" title="Agent Mode" aria-label="Agent Mode">
+                    <button class="codie-toolbar-btn" title="Agent Mode" aria-label="Agent Mode" type="button">
                       <span class="codicon codicon-person"></span>
                     </button>
-                    <button class="codie-toolbar-btn" title="Model Picker" aria-label="Model Picker">
+                    <button class="codie-toolbar-btn" title="Model Picker" aria-label="Model Picker" type="button">
                       <span class="codicon codicon-symbol-parameter"></span>
                     </button>
-                    <button class="codie-toolbar-btn" title="Voice Chat" aria-label="Voice Chat">
+                    <button class="codie-toolbar-btn" title="Voice Chat" aria-label="Voice Chat" type="button">
                       <span class="codicon codicon-mic"></span>
                     </button>
-                  </div>
+                  </form>
                 </div>
               </footer>
             </div>

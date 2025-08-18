@@ -24,6 +24,20 @@ ul, li {
   align-items: center;
   position: relative;
 }
+.codie-chat-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.1rem 0.75rem 0.1rem;
+  background: var(--vscode-debug-ansi-terminal-ansiBlack, #000);
+  border-top: none;
+  gap: 0.75rem;
+  border-radius: 0;
+  box-shadow: none;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
 .chat-input-toolbars {
   display: flex;
 }
@@ -54,6 +68,41 @@ ul, li {
   display: flex;
   align-items: center;
 }
+.codie-input-form {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 0;
+  background: #878787;
+  border-radius: 8px;
+  border: 1.5px solid var(--vscode-sideBar-border, #333);
+  box-shadow: 0 1px 4px 0 #0003;
+  padding: 0.1em 0.2em 0.1em 0.2em;
+  width: 100%;
+  min-width: 0;
+}
+.codie-input-form > * {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.codie-input-form textarea.codie-input {
+  flex: 1 1 auto;
+  min-width: 60px;
+  max-width: none;
+  width: auto;
+  display: flex;
+  resize: vertical;
+}
+.codie-input-form button {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
 .chat-input-toolbars .chat-modelPicker-item .action-label .codicon-chevron-down {
   font-size: 12px;
   margin-left: 2px;
@@ -77,17 +126,31 @@ ul, li {
   box-shadow: none;
   padding: 0.7em 1em;
   min-height: 2.2em;
-  max-height: 7em;
+}
+.codie-input {
+  border: none;
+  border-radius: 0;
+  background: #878787;
+  color: #fff;
+  box-shadow: none;
+  padding: 0.7em 1em;
   line-height: 1.5;
   overflow-y: auto;
   width: 100%;
-  display: block;
-  margin: 0;
-  resize: none;
+  min-width: 0;
   font-size: 1rem;
   outline: none;
-  transition: border 0.15s, box-shadow 0.15s;
+  resize: vertical;
+  margin: 0;
+  flex: 1 1 auto;
+  display: block;
 }
+.codie-input:focus {
+  outline: none;
+  border: none;
+  box-shadow: 0 0 0 2px var(--vscode-focusBorder, #0078d4)33;
+}
+/* Removed orphaned CSS properties block that was not inside a selector */
 .interactive-input-editor textarea:focus,
 .chat-editor-container textarea:focus,
 .ime-text-area:focus {
@@ -96,12 +159,67 @@ ul, li {
 }
 
 /* Toolbar and button styling */
+.codie-attach-btn,
+.codie-send-btn,
+.codie-toolbar-btn {
+  background: #878787;
+  color: #fff;
+  border: none;
+  border-radius: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 1.2rem;
+  margin: 0;
+  box-shadow: none;
+}
+.codie-attach-btn {
+  border-radius: 8px 0 0 8px;
+  border-right: 1px solid var(--vscode-sideBar-border, #333);
+}
+.codie-send-btn {
+  background: #878787;
+  color: #fff;
+  border-radius: 0;
+  border-left: 1px solid var(--vscode-sideBar-border, #333);
+  width: 48px;
+  height: 40px;
+  margin-left: 0;
+}
+.codie-send-btn:active,
+.codie-send-btn:focus {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+.codie-attach-btn:active,
+.codie-attach-btn:focus,
+.codie-toolbar-btn:active,
+.codie-toolbar-btn:focus {
+  background: var(--vscode-button-hoverBackground, #2a2d2e);
+  color: var(--vscode-button-foreground, #fff);
+}
+.codie-toolbar-btn {
+  border-radius: 0 8px 8px 0;
+  border-left: 1px solid var(--vscode-sideBar-border, #333);
+  width: 40px;
+  height: 40px;
+}
 .chat-input-toolbar,
 .chat-execute-toolbar {
   display: flex;
   align-items: center;
   gap: 0.2em;
   margin-top: 0.2em;
+.codie-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 0.2em;
+}
 }
 .chat-input-toolbar .chat-tool,
 .chat-execute-toolbar .chat-tool {
