@@ -70,17 +70,32 @@ ul, li {
 }
 .codie-input-form {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   flex: 1 1 auto;
   align-items: stretch;
-  gap: 0;
-  background: #878787;
+  gap: 0.3em;
+  background: #3c3c3c;
   border-radius: 8px;
   border: 1.5px solid var(--vscode-sideBar-border, #333);
   box-shadow: 0 1px 4px 0 #0003;
-  padding: 0.1em 0.2em 0.1em 0.2em;
+  padding: 0.3em 0.2em 0.3em 0.2em;
   width: 100%;
   min-width: 0;
+}
+.codie-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.3em;
+  margin-bottom: 0.1em;
+}
+.codie-input-row-bottom {
+  margin-top: 0.1em;
+  margin-bottom: 0;
+}
+.codie-input-form textarea.codie-input {
+  margin: 0.1em 0;
 }
 .codie-input-form > * {
   flex: 0 0 auto;
@@ -130,7 +145,7 @@ ul, li {
 .codie-input {
   border: none;
   border-radius: 0;
-  background: #878787;
+  background: #3c3c3c;
   color: #fff;
   box-shadow: none;
   padding: 0.7em 1em;
@@ -162,7 +177,7 @@ ul, li {
 .codie-attach-btn,
 .codie-send-btn,
 .codie-toolbar-btn {
-  background: #878787;
+  background: #3c3c3c;
   color: #fff;
   border: none;
   border-radius: 0;
