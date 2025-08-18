@@ -37,10 +37,7 @@
       ]
     },
     "commands": [
-      {
-        "command": "codie.helloWorld",
-        "title": "Hello World"
-      },
+      
       {
         "command": "codie.openChat",
         "title": "Open Codie Chat"
