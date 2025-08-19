@@ -1,4 +1,9 @@
 
+import { ProviderRegistry } from './providers/ProviderRegistry';
+import { DummyProvider } from './providers/DummyProvider';
+import { FoundryLocalProvider } from './providers/FoundryLocalProvider';
+import { LMStudioProvider } from './providers/LMStudioProvider';
+import { OllamaProvider } from './providers/OllamaProvider';
 import * as vscode from 'vscode';
 // Minimal TreeDataProvider for Codie
 class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
@@ -126,13 +131,73 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
+
 export function activate(context: vscode.ExtensionContext) {
+  // Backend: Provider registry and dynamic provider loading
+  const providerRegistry = new ProviderRegistry();
+  const config = vscode.workspace.getConfiguration();
+
+  // Always register DummyProvider for fallback/testing
+  providerRegistry.register(new DummyProvider());
+
+  // Register providers based on settings
+  if (config.get('codie.providers.foundry.enabled', true)) {
+    providerRegistry.register(new FoundryLocalProvider());
+  }
+  if (config.get('codie.providers.lmstudio.enabled', true)) {
+    const lmstudioEndpoint = config.get('codie.providers.lmstudio.endpoint', 'http://localhost:1234/v1');
+    providerRegistry.register(new LMStudioProvider(lmstudioEndpoint));
+  }
+  if (config.get('codie.providers.ollama.enabled', true)) {
+    const ollamaEndpoint = config.get('codie.providers.ollama.endpoint', 'http://localhost:11434/v1');
+    providerRegistry.register(new OllamaProvider(ollamaEndpoint));
+  }
+
+  // Example: Log all providers and their models at activation
+  providerRegistry.getAllModels().then((all) => {
+    for (const { provider, models } of all) {
+      console.log(`[Codie] Provider: ${provider.getName()}`);
+      for (const model of models) {
+        console.log(`  Model: ${model.id} - ${model.name}`);
+      }
+    }
+  });
+
+  // Register command to list providers/models and select one
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.listModels', async () => {
+      const all = await providerRegistry.getAllModels();
+      const items: { label: string; description: string; provider: string; modelId: string }[] = [];
+      for (const { provider, models } of all) {
+        for (const model of models) {
+          items.push({
+            label: `${provider.getName()} — ${model.name}`,
+            description: model.description || '',
+            provider: provider.getName(),
+            modelId: model.id,
+          });
+        }
+      }
+      if (items.length === 0) {
+        vscode.window.showInformationMessage('No AI models available.');
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select an AI provider and model',
+      });
+      if (picked) {
+        context.workspaceState.update('codie.selectedProvider', picked.provider);
+        context.workspaceState.update('codie.selectedModelId', picked.modelId);
+        vscode.window.showInformationMessage(`Selected: ${picked.label}`);
+      }
+    })
+  );
+
+  // Register UI and data providers as before
   const codieChatViewProvider = new CodieChatViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CodieChatViewProvider.viewType, codieChatViewProvider)
   );
-
-  // Register CodieDataProvider for the data view
   const codieDataProvider = new CodieDataProvider();
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('codie-data-view', codieDataProvider)
