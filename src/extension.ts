@@ -1,3 +1,27 @@
+import { ToolRegistry, Tool } from '../tools/ToolRegistry';
+import * as toolChanges from '../tools/changes';
+import * as toolCodebase from '../tools/codebase';
+import * as toolEditFiles from '../tools/editFiles';
+import * as toolExtensi from '../tools/extensi';
+import * as toolFetch from '../tools/fetch';
+import * as toolFindTestFiles from '../tools/findTestFiles';
+import * as toolGithubRepo from '../tools/githubRepo';
+import * as toolNew from '../tools/new';
+import * as toolOpenSimpleBrowser from '../tools/openSimpleBrowser';
+import * as toolProblems from '../tools/problems';
+import * as toolRunCommands from '../tools/runCommands';
+import * as toolRunNotebooks from '../tools/runNotebooks';
+import * as toolRunTasks from '../tools/runTasks';
+import * as toolRunTests from '../tools/runTests';
+import * as toolSearch from '../tools/search';
+import * as toolSearchResults from '../tools/searchResults';
+import * as toolTerminalLastCommand from '../tools/terminalLastCommand';
+import * as toolTerminalSelection from '../tools/terminalSelection';
+import * as toolTestFailure from '../tools/testFailure';
+import * as toolThink from '../tools/think';
+import * as toolTodos from '../tools/todos';
+import * as toolUsages from '../tools/usages';
+import * as toolVscodeAPI from '../tools/vscodeAPI';
 
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { DummyProvider } from './providers/DummyProvider';
@@ -38,21 +62,31 @@ class CodieTreeItem extends vscode.TreeItem {
 class CodieChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codie-chat-view';
 
+  private _webviewView?: vscode.WebviewView;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
+    this._webviewView = webviewView;
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+
+    // Listen for messages from the webview
+    webviewView.webview.onDidReceiveMessage(async (msg) => {
+      if (msg && msg.command === 'openToolsDropdown') {
+        await vscode.commands.executeCommand('codie.tools.manage');
+      }
+    });
   }
 
   private getHtmlForWebview(webview: vscode.Webview): string {
-  const extensionUri = this.context.extensionUri;
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
-  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chat.css'));
-  const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.css'));
-  const codiconFontUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.ttf'));
-  const codieLogoUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'Codie.png'));
-  return `
+    const extensionUri = this.context.extensionUri;
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chat.css'));
+    const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.css'));
+    const codiconFontUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.ttf'));
+    const codieLogoUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'Codie.png'));
+    return `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -111,7 +145,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
                       <button class="codie-toolbar-btn" title="Voice Chat" aria-label="Voice Chat" type="button">
                         <span class="codicon codicon-mic"></span>
                       </button>
-                      <button class="codie-toolbar-btn" title="Tools" aria-label="Tools" type="button">
+                      <button id="codie-tools-btn" class="codie-toolbar-btn" title="Tools" aria-label="Tools" type="button">
                         <span class="codicon codicon-tools"></span>
                       </button>
                       <button class="codie-send-btn" type="submit" aria-label="Send">
@@ -124,6 +158,13 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             </div>
           </main>
         </div>
+        <script>
+          // Add event listener for the Tools button
+          const vscode = acquireVsCodeApi();
+          document.getElementById('codie-tools-btn')?.addEventListener('click', () => {
+            vscode.postMessage({ command: 'openToolsDropdown' });
+          });
+        </script>
         <script src="${scriptUri}"></script>
       </body>
       </html>
@@ -133,9 +174,75 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
 
 export function activate(context: vscode.ExtensionContext) {
+  const config = vscode.workspace.getConfiguration();
+  // Register tools with ToolRegistry based on enable/disable settings
+  const toolConfigs: { id: string, label: string, description: string, module: any, setting: string }[] = [
+    { id: 'changes', label: 'Changes', description: 'Get diffs of changed files', module: toolChanges, setting: 'codie.tools.changes.enabled' },
+    { id: 'codebase', label: 'Codebase', description: 'Find relevant file chunks, symbols, and codebase info', module: toolCodebase, setting: 'codie.tools.codebase.enabled' },
+    { id: 'editFiles', label: 'Edit Files', description: 'Edit files in your workspace', module: toolEditFiles, setting: 'codie.tools.editFiles.enabled' },
+    { id: 'extensi', label: 'Extensi', description: 'VS Code Extensions Marketplace integration', module: toolExtensi, setting: 'codie.tools.extensi.enabled' },
+    { id: 'fetch', label: 'Fetch', description: 'Fetch the main content from a web page', module: toolFetch, setting: 'codie.tools.fetch.enabled' },
+    { id: 'findTestFiles', label: 'Find Test Files', description: 'Find test files for a given source or test file', module: toolFindTestFiles, setting: 'codie.tools.findTestFiles.enabled' },
+    { id: 'githubRepo', label: 'GitHub Repo', description: 'Search a GitHub repository for code snippets', module: toolGithubRepo, setting: 'codie.tools.githubRepo.enabled' },
+    { id: 'new', label: 'New', description: 'Scaffold a new workspace with VS Code configs', module: toolNew, setting: 'codie.tools.new.enabled' },
+    { id: 'openSimpleBrowser', label: 'Open Simple Browser', description: 'Preview a locally hosted website', module: toolOpenSimpleBrowser, setting: 'codie.tools.openSimpleBrowser.enabled' },
+    { id: 'problems', label: 'Problems', description: 'Check errors for a particular file', module: toolProblems, setting: 'codie.tools.problems.enabled' },
+    { id: 'runCommands', label: 'Run Commands', description: 'Run commands in the terminal', module: toolRunCommands, setting: 'codie.tools.runCommands.enabled' },
+    { id: 'runNotebooks', label: 'Run Notebooks', description: 'Run notebook cells', module: toolRunNotebooks, setting: 'codie.tools.runNotebooks.enabled' },
+    { id: 'runTasks', label: 'Run Tasks', description: 'Run tasks and get their output', module: toolRunTasks, setting: 'codie.tools.runTasks.enabled' },
+    { id: 'runTests', label: 'Run Tests', description: 'Run unit tests', module: toolRunTests, setting: 'codie.tools.runTests.enabled' },
+    { id: 'search', label: 'Search', description: 'Search and read files in your workspace', module: toolSearch, setting: 'codie.tools.search.enabled' },
+    { id: 'searchResults', label: 'Search Results', description: 'Get results from the search view', module: toolSearchResults, setting: 'codie.tools.searchResults.enabled' },
+    { id: 'terminalLastCommand', label: 'Terminal Last Command', description: 'Get the last command run in the terminal', module: toolTerminalLastCommand, setting: 'codie.tools.terminalLastCommand.enabled' },
+    { id: 'terminalSelection', label: 'Terminal Selection', description: 'Get the current selection in the terminal', module: toolTerminalSelection, setting: 'codie.tools.terminalSelection.enabled' },
+    { id: 'testFailure', label: 'Test Failure', description: 'Get info about the last unit test failure', module: toolTestFailure, setting: 'codie.tools.testFailure.enabled' },
+    { id: 'think', label: 'Think', description: 'Deep thinking and task organization', module: toolThink, setting: 'codie.tools.think.enabled' },
+    { id: 'todos', label: 'Todos', description: 'Manage and track todo items', module: toolTodos, setting: 'codie.tools.todos.enabled' },
+    { id: 'usages', label: 'Usages', description: 'Find symbol usages', module: toolUsages, setting: 'codie.tools.usages.enabled' },
+    { id: 'vscodeAPI', label: 'VS Code API', description: 'VS Code API reference and documentation', module: toolVscodeAPI, setting: 'codie.tools.vscodeAPI.enabled' },
+  ];
+
+  for (const tool of toolConfigs) {
+    const enabled = config.get<boolean>(tool.setting, true);
+    ToolRegistry.register({
+      id: tool.id,
+      label: tool.label,
+      description: tool.description,
+      enabled,
+      execute: tool.module[tool.id] || (async () => { throw new Error('Not implemented'); })
+    });
+  }
+
+  // Command to list and toggle tools
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.tools.manage', async () => {
+      const allTools = ToolRegistry.list();
+      const picks = await vscode.window.showQuickPick(
+        allTools.map(t => ({
+          label: t.label,
+          description: t.description,
+          picked: t.enabled,
+          id: t.id
+        })),
+        {
+          canPickMany: true,
+          placeHolder: 'Enable or disable tools'
+        }
+      );
+      if (picks) {
+        for (const tool of allTools) {
+          const shouldEnable = picks.some(p => p.id === tool.id);
+          if (tool.enabled !== shouldEnable) {
+            await config.update(`codie.tools.${tool.id}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
+            tool.enabled = shouldEnable;
+          }
+        }
+        vscode.window.showInformationMessage('Tool settings updated.');
+      }
+    })
+  );
   // Backend: Provider registry and dynamic provider loading
   const providerRegistry = new ProviderRegistry();
-  const config = vscode.workspace.getConfiguration();
 
   // Always register DummyProvider for fallback/testing
   providerRegistry.register(new DummyProvider());

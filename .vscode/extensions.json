@@ -2,6 +2,14 @@
   "recommendations": [
     "dbaeumer.vscode-eslint",
     "amodio.tsl-problem-matcher",
-    "ms-vscode.extension-test-runner"
+    "ms-vscode.extension-test-runner",
+    "ms-toolsai.jupyter",
+    "ms-python.python",
+    "ms-azuretools.vscode-azureapi",
+    "ms-azuretools.vscode-azureapicenter",
+    "ms-azuretools.vscode-azureresources",
+    "Dart-Code.dart-code",
+    "github.copilot",
+    "github.vscode-pull-request-github"
   ]
 }

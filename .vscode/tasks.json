@@ -2,16 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "type": "npm",
-      "script": "watch",
-      "problemMatcher": "$ts-webpack-watch",
-      "isBackground": true,
-      "presentation": {
-        "reveal": "never",
-        "group": "watchers"
-      }
-    },
-    {
       "label": "tsc: watch - tsconfig.json",
       "type": "shell",
       "command": "npx tsc --watch --preserveWatchOutput",
@@ -37,7 +27,6 @@
         "group": "watchers"
       },
       "group": "build"
-    },
-
+    }
   ]
 }

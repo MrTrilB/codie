@@ -73,6 +73,144 @@
             "default": "http://localhost:3333",
             "description": "MCP tool server endpoint URI (default: http://localhost:3333)",
             "scope": "window"
+          },
+          "codie.tools.changes.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'changes' tool (Get diffs of changed files)",
+            "scope": "window"
+          },
+          "codie.tools.codebase.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'codebase' tool (Find relevant file chunks, symbols, and codebase info)",
+            "scope": "window"
+          },
+          "codie.tools.editFiles.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'editFiles' tool (Edit files in your workspace)",
+            "scope": "window"
+          },
+          "codie.tools.extensi.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'extensi' tool (VS Code Extensions Marketplace integration)",
+            "scope": "window"
+          },
+          "codie.tools.fetch.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'fetch' tool (Fetch the main content from a web page)",
+            "scope": "window"
+          },
+          "codie.tools.findTestFiles.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'findTestFiles' tool (Find test files for a given source or test file)",
+            "scope": "window"
+          },
+          "codie.tools.githubRepo.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'githubRepo' tool (Search a GitHub repository for code snippets)",
+            "scope": "window"
+          },
+          "codie.tools.new.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'new' tool (Scaffold a new workspace with VS Code configs)",
+            "scope": "window"
+          },
+          "codie.tools.openSimpleBrowser.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'openSimpleBrowser' tool (Preview a locally hosted website)",
+            "scope": "window"
+          },
+          "codie.tools.problems.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'problems' tool (Check errors for a particular file)",
+            "scope": "window"
+          },
+          "codie.tools.runCommands.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'runCommands' tool (Run commands in the terminal)",
+            "scope": "window"
+          },
+          "codie.tools.runNotebooks.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'runNotebooks' tool (Run notebook cells)",
+            "scope": "window"
+          },
+          "codie.tools.runTasks.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'runTasks' tool (Run tasks and get their output)",
+            "scope": "window"
+          },
+          "codie.tools.runTests.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'runTests' tool (Run unit tests)",
+            "scope": "window"
+          },
+          "codie.tools.search.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'search' tool (Search and read files in your workspace)",
+            "scope": "window"
+          },
+          "codie.tools.searchResults.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'searchResults' tool (Get results from the search view)",
+            "scope": "window"
+          },
+          "codie.tools.terminalLastCommand.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'terminalLastCommand' tool (Get the last command run in the terminal)",
+            "scope": "window"
+          },
+          "codie.tools.terminalSelection.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'terminalSelection' tool (Get the current selection in the terminal)",
+            "scope": "window"
+          },
+          "codie.tools.testFailure.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'testFailure' tool (Get info about the last unit test failure)",
+            "scope": "window"
+          },
+          "codie.tools.think.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'think' tool (Deep thinking and task organization)",
+            "scope": "window"
+          },
+          "codie.tools.todos.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'todos' tool (Manage and track todo items)",
+            "scope": "window"
+          },
+          "codie.tools.usages.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'usages' tool (Find symbol usages)",
+            "scope": "window"
+          },
+          "codie.tools.vscodeAPI.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable the 'vscodeAPI' tool (VS Code API reference and documentation)",
+            "scope": "window"
           }
         }
       },
@@ -116,6 +254,12 @@
       {
         "command": "codie.openChat",
         "title": "Open Codie Chat"
+      },
+      {
+        "command": "codie.tools.manage",
+        "title": "Manage Codie Tools",
+        "category": "Codie",
+        "description": "Enable or disable Codie developer tools"
       }
     ]
   },
