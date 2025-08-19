@@ -16,13 +16,22 @@ export class LMStudioProvider implements AIProvider {
 
   async listModels(): Promise<AIModelInfo[]> {
     // LM Studio exposes /models endpoint for listing models
-    const resp = await fetch(`${this.endpoint}/models`);
-    const models = await resp.json();
-    return (models || []).map((m: any) => ({
-      id: m.id || m.name,
-      name: m.name || m.id,
-      description: m.description || '',
-    }));
+    try {
+      const resp = await fetch(`${this.endpoint}/models`);
+      if (!resp.ok) {
+        console.error(`LMStudioProvider: Failed to fetch models, status: ${resp.status}`);
+        return [];
+      }
+      const models = await resp.json();
+      return (models || []).map((m: any) => ({
+        id: m.id || m.name,
+        name: m.name || m.id,
+        description: m.description || '',
+      }));
+    } catch (err) {
+      console.error('LMStudioProvider: Error fetching models:', err);
+      return [];
+    }
   }
 
   async sendMessage(modelId: string, message: string): Promise<string> {
