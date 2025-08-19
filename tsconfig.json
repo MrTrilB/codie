@@ -1,16 +1,16 @@
 {
   "compilerOptions": {
+  "types": ["vscode", "node"],
     "module": "commonjs",
     "target": "es2020",
     "outDir": "dist",
-  "lib": ["es2020", "dom"],
+    "lib": ["es2020", "dom"],
     "sourceMap": true,
     "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-  "forceConsistentCasingInFileNames": true,
-  "types": ["vscode", "node"]
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src", "test"],
   "exclude": ["context"]
