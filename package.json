@@ -12,6 +12,89 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Codie Settings",
+      "properties": {
+        "codie.general.title": {
+          "type": "string",
+          "default": "General",
+          "description": "General settings category title.",
+          "scope": "window"
+        },
+        "codie.providers.title": {
+          "type": "string",
+          "default": "Providers",
+          "description": "Providers settings category title.",
+          "scope": "window"
+        },
+        "codie.providers.ollama.title": {
+          "type": "string",
+          "default": "Ollama",
+          "description": "Ollama provider settings title.",
+          "scope": "window"
+        },
+        "codie.providers.ollama.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Ollama provider.",
+          "scope": "window"
+        },
+        "codie.providers.ollama.endpoint": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Ollama API endpoint URI (default: http://localhost:11434/v1)",
+          "scope": "window"
+        },
+        "codie.providers.lmstudio.title": {
+          "type": "string",
+          "default": "LM Studio",
+          "description": "LM Studio provider settings title.",
+          "scope": "window"
+        },
+        "codie.providers.lmstudio.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable LM Studio provider.",
+          "scope": "window"
+        },
+        "codie.providers.lmstudio.endpoint": {
+          "type": "string",
+          "default": "http://localhost:1234/v1",
+          "description": "LM Studio API endpoint URI (default: http://localhost:1234/v1)",
+          "scope": "window"
+        },
+        "codie.providers.foundry.title": {
+          "type": "string",
+          "default": "Azure Foundry Local",
+          "description": "Azure Foundry Local provider settings title.",
+          "scope": "window"
+        },
+        "codie.providers.foundry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Azure Foundry Local provider.",
+          "scope": "window"
+        },
+        "codie.tools.title": {
+          "type": "string",
+          "default": "Tools",
+          "description": "Tools settings category title.",
+          "scope": "window"
+        },
+        "codie.tools.mcp.endpoint": {
+          "type": "string",
+          "default": "http://localhost:3333",
+          "description": "MCP tool server endpoint URI (default: http://localhost:3333)",
+          "scope": "window"
+        },
+        "codie.permissions.title": {
+          "type": "string",
+          "default": "Permissions",
+          "description": "Permissions settings category title.",
+          "scope": "window"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -37,7 +120,6 @@
       ]
     },
     "commands": [
-      
       {
         "command": "codie.openChat",
         "title": "Open Codie Chat"
