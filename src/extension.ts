@@ -220,7 +220,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
                 <div class="codie-footer-content">
                   <form class="codie-input-form" autocomplete="off">
                     <div class="codie-input-row codie-input-row-top">
-                      <a href="#" class="codie-attach-link" title="Add Context" aria-label="Add Context" role="button" tabindex="0" >
+                      <a href="#" class="codie-attach-link" id="codie-add-context-btn" title="Add Context" aria-label="Add Context" role="button" tabindex="0">
                         <span class="codicon codicon-folder" style="font-size: 11px;"></span>
                         <span style="margin-left:0.4em; font-size:10px;">Add Context...</span>
                       </a>

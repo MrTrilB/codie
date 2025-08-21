@@ -1,113 +1,128 @@
-// ...existing code...
 import { AIProvider, AIModelInfo } from './AIProvider';
-
+import { FoundryLocalManager } from 'foundry-local-sdk';
 import { OpenAI } from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { execSync } from 'child_process';
-
 
 export class FoundryLocalProvider implements AIProvider {
-  async setActiveModel(modelId: string): Promise<void> {
-    // FoundryLocal specifies model per request, so this is a no-op.
-    return;
-  }
+  private foundryManager: FoundryLocalManager;
   private openai: OpenAI | undefined;
   private endpoint: string | undefined;
-  private apiKey: string = 'foundry-local'; // Placeholder, not used
+  private apiKey: string | undefined;
   private modelInfo: any | null = null;
 
-  constructor() {
-  // Inform user about static port setup
-  console.info('[FoundryLocalProvider] To set a static port for Foundry Local, use: foundry service set --port <port#>');
-  // Discover endpoint on construction
-  this.endpoint = this.discoverEndpoint();
-  }
-
-  private discoverEndpoint(): string | undefined {
-    try {
-      const output = execSync('foundry service status', { encoding: 'utf-8' });
-      // Example output: 🟢 Model management service is running on http://127.0.0.1:60244/openai/status
-      const match = output.match(/on (http:\/\/[^\s/]+:\d+)/);
-      if (match && match[1]) {
-        return match[1];
-      }
-      // Try to match full URL if /openai/status is present
-      const matchFull = output.match(/on (http:\/\/[^\s]+)\/openai\/status/);
-      if (matchFull && matchFull[1]) {
-        return matchFull[1];
-      }
-      throw new Error('Could not parse Foundry Local endpoint from CLI output.');
-    } catch (err) {
-      console.error('Error discovering Foundry Local endpoint:', err);
-      return undefined;
+  /**
+   * Construct the provider. Optionally pass endpoint for testability/configuration.
+   * If not provided, will attempt to discover via CLI.
+   */
+  constructor(endpoint?: string) {
+    this.foundryManager = new FoundryLocalManager();
+    if (endpoint) {
+      this.endpoint = endpoint;
+      this.apiKey = 'foundry-local'; // fallback for manual endpoint
     }
   }
 
-
-  getName(): string {
-    return 'FoundryLocal';
-  }
-
-
-  async listModels(): Promise<AIModelInfo[]> {
-    if (!this.endpoint) throw new Error('Foundry Local endpoint not discovered.');
+  /**
+   * Discover the Foundry Local endpoint using the SDK.
+   * Returns undefined if not found.
+   * Exposed as public for testability.
+   */
+  public async discoverEndpoint(): Promise<string | undefined> {
     try {
-      const resp = await fetch(`${this.endpoint}/openai/models`);
-      if (!resp.ok) {
-        let msg = `[FoundryLocalProvider] /openai/models returned status ${resp.status}`;
-        if (resp.status === 404) {
-          msg += '. Is Foundry Local running at ' + this.endpoint + '?';
-        }
-        throw new Error(msg);
+      // Ensure service is running
+      const running = await this.foundryManager.isServiceRunning();
+      if (!running) {
+        console.warn('[FoundryLocalProvider] Foundry Local service is not running. Attempting to start...');
+        await this.foundryManager.startService();
       }
-      const models = await resp.json();
-      console.debug('[FoundryLocalProvider] /openai/models response:', models);
-      let modelList: any[] = [];
-      if (Array.isArray(models)) {
-        modelList = models;
-        if (modelList.length === 0) {
-          console.warn('[FoundryLocalProvider] No models found in API response (array):', models);
-          return [];
-        }
-        return modelList.map((id: string) => ({
-          id,
-          name: id,
-          description: '',
-          _raw: id,
-        }));
-      } else {
-        modelList = models.data || models.models || [];
-        if (!Array.isArray(modelList) || modelList.length === 0) {
-          console.warn('[FoundryLocalProvider] No models found in API response (object):', models);
-          return [];
-        }
-        return modelList.map((m: any) => ({
-          id: m.id || m.name,
-          name: m.displayName || m.name || m.id || 'Unknown Model',
-          description: m.task || m.description || '',
-          _raw: m,
-        }));
+      this.endpoint = this.foundryManager.endpoint;
+      this.apiKey = this.foundryManager.apiKey;
+      if (!this.endpoint) {
+        throw new Error('[FoundryLocalProvider] Service URL is not set after SDK start.');
       }
+      return this.endpoint;
     } catch (err: any) {
-      let msg = '[FoundryLocalProvider] Error listing models:';
-      if (err?.message?.includes('404')) {
-        msg += ' 404 Not Found. Is Foundry Local running at ' + this.endpoint + '?';
-      } else if (err?.code === 'ECONNREFUSED' || err?.message?.includes('ECONNREFUSED')) {
-        msg += ' Connection refused. Is Foundry Local running at ' + this.endpoint + '?';
-      } else {
-        msg += ' ' + (err?.message || err);
-      }
+      let msg = '[FoundryLocalProvider] Error discovering Foundry Local endpoint via SDK:';
+      msg += ' ' + (err?.message || err);
+      msg += '\nTroubleshooting steps:';
+      msg += '\n- Ensure the Foundry Local service is installed and available in your PATH.';
+      msg += '\n- Try running \'foundry service start\' in a terminal.';
+      msg += '\n- You can also set the endpoint explicitly in your VS Code settings:';
+      msg += '\n  "codie.foundry.serviceUrl": "http://localhost:60244"';
       console.error(msg);
       throw new Error(msg);
     }
   }
 
+  /**
+   * No-op for FoundryLocal (model is specified per request).
+   */
+  async setActiveModel(modelId: string): Promise<void> {
+    // Optionally preload or switch model using SDK
+    if (!modelId) return;
+    try {
+      await this.foundryManager.loadModel(modelId);
+    } catch (err) {
+      console.warn('[FoundryLocalProvider] Could not load model:', modelId, err);
+    }
+  }
+
+  getName(): string {
+    return 'FoundryLocal';
+  }
+
+  async listModels(): Promise<AIModelInfo[]> {
+    try {
+      // Ensure endpoint is set
+      if (!this.endpoint) {
+        await this.discoverEndpoint();
+      }
+      if (!this.endpoint) {
+        throw new Error('[FoundryLocalProvider] Service URL is not set. Please start the Foundry Local service or set the endpoint explicitly.');
+      }
+      // Use SDK to list catalog and cached models
+      const catalog = await this.foundryManager.listCatalogModels();
+      const cached = await this.foundryManager.listCachedModels();
+      // Merge and dedupe by id
+      const allModels = [...(catalog || []), ...(cached || [])];
+      const seen = new Set();
+      const models: AIModelInfo[] = allModels
+        .filter((m: any) => {
+          if (!m.id || seen.has(m.id)) return false;
+          seen.add(m.id);
+          return true;
+        })
+        .map((m: any) => ({
+          id: m.id || m.name,
+          name: m.displayName || m.name || m.id || 'Unknown Model',
+          description: m.task || m.description || '',
+          _raw: m,
+        }));
+      return models;
+    } catch (err: any) {
+      let msg = '[FoundryLocalProvider] Error listing models via SDK:';
+      msg += ' ' + (err?.message || err);
+      msg += '\nTroubleshooting steps:';
+      msg += '\n- Ensure the Foundry Local service is running and available in your PATH.';
+      msg += '\n- Try running \'foundry service start\' in a terminal.';
+      msg += '\n- You can also set the endpoint explicitly in your VS Code settings:';
+      msg += '\n  "codie.foundry.serviceUrl": "http://localhost:60244"';
+      console.error(msg);
+      throw new Error(msg);
+    }
+  }
 
   async sendMessage(modelId: string, message: string, systemPrompt?: string): Promise<string> {
-    if (!this.endpoint) throw new Error('Foundry Local endpoint not discovered.');
     try {
+      // Ensure endpoint/apiKey are set
+      if (!this.endpoint || !this.apiKey) {
+        await this.discoverEndpoint();
+      }
+      if (!this.endpoint || !this.apiKey) {
+        throw new Error('[FoundryLocalProvider] Service URL is not set. Please start the Foundry Local service or set the endpoint explicitly.');
+      }
       if (!this.openai) {
-        this.openai = new OpenAI({ baseURL: `${this.endpoint}/openai`, apiKey: this.apiKey });
+        this.openai = new OpenAI({ baseURL: this.endpoint, apiKey: this.apiKey });
       }
       const messages: ChatCompletionMessageParam[] = [];
       if (systemPrompt) {
@@ -121,14 +136,13 @@ export class FoundryLocalProvider implements AIProvider {
       });
       return completion.choices[0]?.message?.content || '';
     } catch (err: any) {
-      let msg = '[FoundryLocalProvider] Error sending message:';
-      if (err?.message?.includes('404')) {
-        msg += ' 404 Not Found. Is Foundry Local running at ' + this.endpoint + '?';
-      } else if (err?.code === 'ECONNREFUSED' || err?.message?.includes('ECONNREFUSED')) {
-        msg += ' Connection refused. Is Foundry Local running at ' + this.endpoint + '?';
-      } else {
-        msg += ' ' + (err?.message || err);
-      }
+      let msg = '[FoundryLocalProvider] Error sending message via SDK:';
+      msg += ' ' + (err?.message || err);
+      msg += '\nTroubleshooting steps:';
+      msg += '\n- Ensure the Foundry Local service is running and available in your PATH.';
+      msg += '\n- Try running \'foundry service start\' in a terminal.';
+      msg += '\n- You can also set the endpoint explicitly in your VS Code settings:';
+      msg += '\n  "codie.foundry.serviceUrl": "http://localhost:60244"';
       console.error(msg);
       throw new Error(msg);
     }

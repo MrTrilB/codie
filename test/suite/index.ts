@@ -1,10 +1,11 @@
 // Minimal Mocha test suite for VS Code extension
-
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import Mocha from 'mocha';
 
-export function registerTests(mocha: Mocha) {
+import { registerFoundryLocalProviderTests } from '../providers/FoundryLocalProvider.test';
+
+
+export function registerSuiteTests(mocha: Mocha) {
   const suite = Mocha.Suite.create(mocha.suite, 'Codie Extension');
 
   suite.addTest(new Mocha.Test('should be present', function() {
@@ -27,4 +28,7 @@ export function registerTests(mocha: Mocha) {
       done(new Error('Extension not found'));
     }
   }));
+
+  // Register FoundryLocalProvider tests
+  registerFoundryLocalProviderTests(suite);
 }

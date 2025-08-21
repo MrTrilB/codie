@@ -1,3 +1,82 @@
+// Dropdown logic for Add Context
+function createContextDropdown() {
+  let dropdown = document.getElementById('codie-context-dropdown');
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = 'codie-context-dropdown';
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = '3em';
+    dropdown.style.left = '2em';
+    dropdown.style.background = '#222';
+    dropdown.style.border = '1px solid #444';
+    dropdown.style.padding = '1em';
+    dropdown.style.zIndex = 1000;
+    dropdown.style.minWidth = '250px';
+    dropdown.style.maxHeight = '300px';
+    dropdown.style.overflowY = 'auto';
+    dropdown.style.display = 'none';
+    document.body.appendChild(dropdown);
+  }
+  return dropdown;
+}
+
+function showContextDropdown() {
+  const dropdown = createContextDropdown();
+  // Placeholder for file/folder list
+  dropdown.innerHTML = `
+    <div id="codie-context-list" style="margin-bottom:0.5em;color:#ccc">Loading files and folders...</div>
+    <button id="codie-context-confirm-btn" style="margin-top:0.5em;width:100%">Add Selected as Context</button>
+  `;
+  dropdown.style.display = 'block';
+  // Request file/folder list from extension
+  if (window.vscode) {
+    window.vscode.postMessage({ command: 'getWorkspaceFilesAndFolders' });
+  }
+  // Confirm button handler
+  setTimeout(() => {
+    const confirmBtn = document.getElementById('codie-context-confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.onclick = function() {
+        const checked = Array.from(dropdown.querySelectorAll('input[type=checkbox]:checked'));
+        const selected = checked.map(cb => cb.value);
+        if (window.vscode && selected.length > 0) {
+          window.vscode.postMessage({ command: 'addContext', items: selected });
+        }
+        hideContextDropdown();
+      };
+    }
+  }, 100);
+}
+
+function hideContextDropdown() {
+  const dropdown = document.getElementById('codie-context-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('codie-context-dropdown');
+  if (dropdown && dropdown.style.display === 'block') {
+    if (!dropdown.contains(e.target) && e.target.id !== 'codie-add-context-btn') {
+      hideContextDropdown();
+    }
+  }
+});
+
+window.addEventListener('DOMContentLoaded', function() {
+  // Attach to the Add Context button by id
+  const addContextBtn = document.getElementById('codie-add-context-btn');
+  if (addContextBtn) {
+    addContextBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const dropdown = createContextDropdown();
+      if (dropdown.style.display === 'block') {
+        hideContextDropdown();
+      } else {
+        showContextDropdown();
+      }
+    });
+  }
+});
 // Only call acquireVsCodeApi() ONCE and reuse
 window.vscode = window.vscode || (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined);
 
@@ -18,8 +97,11 @@ if (window.vscode) {
   window.vscode.postMessage({ command: 'getSelectedModel' });
 }
 // Listen for selectedModel message
+
+
 window.addEventListener('message', function(event) {
   var msg = event.data;
+  // Handle selectedModel
   if (msg && msg.command === 'selectedModel') {
     var el = document.getElementById('codie-selected-model');
     if (el) {
@@ -32,6 +114,21 @@ window.addEventListener('message', function(event) {
         text = 'No AI selected';
       }
       el.textContent = text;
+    }
+  }
+  // Handle workspace files/folders for context dropdown
+  if (msg && msg.command === 'workspaceFilesAndFolders') {
+    const list = msg.items || [];
+    const listDiv = document.getElementById('codie-context-list');
+    if (listDiv) {
+      if (list.length === 0) {
+        listDiv.innerHTML = '<div style="color:#888">No files or folders found.</div>';
+      } else {
+        listDiv.innerHTML = list.map(item => {
+          const icon = item.type === 'folder' ? '📁' : '📄';
+          return `<label style="display:block;margin-bottom:0.2em;cursor:pointer"><input type="checkbox" value="${encodeURIComponent(item.path)}"> ${icon} <span style="color:#ccc">${item.name}</span></label>`;
+        }).join('');
+      }
     }
   }
 });
@@ -65,18 +162,29 @@ function renderMessages() {
   chatHistory.forEach(({ text, sender, time }) => {
     const msg = document.createElement('div');
     msg.className = `codie-chat-message ${sender}`;
+
+    // Name and time at the top
+    const header = document.createElement('div');
+    header.className = 'codie-chat-header';
     const label = document.createElement('span');
     label.className = 'codie-chat-label';
-    label.textContent = sender === 'user' ? 'You' : 'Codie';
+    label.textContent = sender === 'user' ? 'You' : (sender === 'bot' ? 'Codie' : sender);
     const timestamp = document.createElement('span');
     timestamp.className = 'codie-chat-timestamp';
     timestamp.textContent = formatTime(time);
-    const content = document.createElement('span');
+    header.appendChild(label);
+    header.appendChild(document.createTextNode(' '));
+    header.appendChild(timestamp);
+
+    // Message content
+    const content = document.createElement('div');
     content.className = 'codie-chat-content';
     content.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
-    msg.appendChild(label);
+
+    // Compose message: header, linebreak, content
+    msg.appendChild(header);
+    msg.appendChild(document.createElement('br'));
     msg.appendChild(content);
-    msg.appendChild(timestamp);
     chatMessages.appendChild(msg);
   });
   chatMessages.scrollTop = chatMessages.scrollHeight;
