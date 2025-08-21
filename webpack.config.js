@@ -13,6 +13,8 @@ module.exports = {
   devtool: 'source-map',
   externals: {
     vscode: 'commonjs vscode',
+    'utf-8-validate': 'commonjs utf-8-validate',
+    'bufferutil': 'commonjs bufferutil',
   },
   resolve: {
     extensions: ['.ts', '.js'],

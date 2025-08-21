@@ -12,11 +12,18 @@ export class ProviderRegistry {
   }
 
   async getAllModels(): Promise<{ provider: AIProvider; models: AIModelInfo[] }[]> {
-    return Promise.all(
-      this.providers.map(async (provider) => ({
-        provider,
-        models: await provider.listModels(),
-      }))
-    );
+    // Add error handling and debug logging
+    const results: { provider: AIProvider; models: AIModelInfo[] }[] = [];
+    for (const provider of this.providers) {
+      try {
+        const models = await provider.listModels();
+        console.log(`[Codie] ProviderRegistry: ${provider.getName()} returned models:`, models);
+        results.push({ provider, models });
+      } catch (err) {
+        console.error(`[Codie] ProviderRegistry: Error listing models for ${provider.getName()}:`, err);
+        results.push({ provider, models: [] });
+      }
+    }
+    return results;
   }
 }

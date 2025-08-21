@@ -27,6 +27,12 @@
       {
         "title": "Providers",
         "properties": {
+          "codie.foundry.serviceUrl": {
+            "type": "string",
+            "default": "",
+            "description": "Override the Foundry Local service URL (e.g. http://localhost:60244). If set, this will be used for all Foundry Local operations.",
+            "scope": "window"
+          },
           "codie.providers.ollama.enabled": {
             "type": "boolean",
             "default": true,
@@ -260,6 +266,12 @@
         "title": "Manage Codie Tools",
         "category": "Codie",
         "description": "Enable or disable Codie developer tools"
+      },
+      {
+        "command": "codie.testFoundryConnection",
+        "title": "Test Foundry Local Connection",
+        "category": "Codie",
+        "description": "Test connectivity to Foundry Local and list available models."
       }
     ]
   },
@@ -284,8 +296,10 @@
     "test": "vscode-test run --extensionDevelopmentPath=. --extensionTestsPath=./test/index"
   },
   "dependencies": {
+    "@lmstudio/sdk": "^1.5.0",
     "@vscode/codicons": "^0.0.39",
     "foundry-local-sdk": "^0.3.1",
+    "ollama": "^0.5.17",
     "openai": "^5.12.2"
   }
 }

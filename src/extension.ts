@@ -24,12 +24,33 @@ import * as toolUsages from '../tools/usages';
 import * as toolVscodeAPI from '../tools/vscodeAPI';
 
 import { ProviderRegistry } from './providers/ProviderRegistry';
-import { DummyProvider } from './providers/DummyProvider';
 import { FoundryLocalProvider } from './providers/FoundryLocalProvider';
 import { LMStudioProvider } from './providers/LMStudioProvider';
 import { OllamaProvider } from './providers/OllamaProvider';
 import * as vscode from 'vscode';
-// Minimal TreeDataProvider for Codie
+
+// Tree item types
+type CodieTreeItemType = 'root' | 'providers' | 'provider' | 'foundry-static-port';
+
+class CodieTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly label: string,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly type: CodieTreeItemType,
+    public readonly providerKey?: string
+  ) {
+    super(label, collapsibleState);
+    this.contextValue = type;
+    if (type === 'foundry-static-port') {
+      this.command = {
+        command: 'codie.treeView.itemClick',
+        title: 'Create Static Port',
+        arguments: [this]
+      };
+    }
+  }
+}
+
 class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<CodieTreeItem | undefined | void> = new vscode.EventEmitter<CodieTreeItem | undefined | void>();
   readonly onDidChangeTreeData: vscode.Event<CodieTreeItem | undefined | void> = this._onDidChangeTreeData.event;
@@ -40,41 +61,133 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
   getChildren(element?: CodieTreeItem): Thenable<CodieTreeItem[]> {
     if (!element) {
-      // Root items
+      // Root: show Providers parent
       return Promise.resolve([
-        new CodieTreeItem('Welcome to Codie!', vscode.TreeItemCollapsibleState.None),
-        new CodieTreeItem('Try the chat below', vscode.TreeItemCollapsibleState.None)
+        new CodieTreeItem('Providers', vscode.TreeItemCollapsibleState.Expanded, 'providers')
       ]);
     }
+    if (element.type === 'providers') {
+      // Children: each provider
+      return Promise.resolve([
+        new CodieTreeItem('FoundryLocal', vscode.TreeItemCollapsibleState.Collapsed, 'provider', 'foundry'),
+        new CodieTreeItem('LM Studio', vscode.TreeItemCollapsibleState.None, 'provider', 'lmstudio'),
+        new CodieTreeItem('Ollama', vscode.TreeItemCollapsibleState.None, 'provider', 'ollama'),
+      ]);
+    }
+    if (element.type === 'provider' && element.providerKey === 'foundry') {
+      // Foundry children: static port option
+      return Promise.resolve([
+        new CodieTreeItem('Create Static Port', vscode.TreeItemCollapsibleState.None, 'foundry-static-port', 'foundry')
+      ]);
+    }
+    // No children for other providers
     return Promise.resolve([]);
   }
 }
 
-class CodieTreeItem extends vscode.TreeItem {
-  constructor(
-    public readonly label: string,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState
-  ) {
-    super(label, collapsibleState);
-  }
-}
+
 
 class CodieChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codie-chat-view';
 
   private _webviewView?: vscode.WebviewView;
+  private providerRegistry: ProviderRegistry;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  // Public method to update selected model in the webview
+  public updateSelectedModel() {
+    if (!this._webviewView) return;
+    const provider = this.context.workspaceState.get('codie.selectedProvider', '');
+    const model = this.context.workspaceState.get('codie.selectedModelId', '');
+    this._webviewView.webview.postMessage({ command: 'selectedModel', provider, model });
+  }
+
+  constructor(private readonly context: vscode.ExtensionContext, providerRegistry: ProviderRegistry) {
+    this.providerRegistry = providerRegistry;
+  }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
     this._webviewView = webviewView;
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
+    // Helper to send selected model/provider to webview
+    const sendSelectedModel = () => {
+      const provider = this.context.workspaceState.get('codie.selectedProvider', '');
+      const model = this.context.workspaceState.get('codie.selectedModelId', '');
+      webviewView.webview.postMessage({ command: 'selectedModel', provider, model });
+    };
+
     // Listen for messages from the webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
-      if (msg && msg.command === 'openToolsDropdown') {
-        await vscode.commands.executeCommand('codie.tools.manage');
+      if (!msg || !msg.command) return;
+      switch (msg.command) {
+        case 'openToolsDropdown':
+          await vscode.commands.executeCommand('codie.tools.manage');
+          break;
+        case 'openProviderSettings':
+          await vscode.commands.executeCommand('codie.listProviders');
+          break;
+        case 'openModelPicker':
+          await vscode.commands.executeCommand('codie.listModelsGrouped');
+          break;
+        case 'getSelectedModel':
+          sendSelectedModel();
+          break;
+        case 'userChatMessage': {
+          // Debug: log message receipt
+          console.log('[Codie] Received userChatMessage from webview:', msg);
+          const userText = msg.text || '';
+          // Get selected provider/model from workspaceState
+          const providerName = this.context.workspaceState.get('codie.selectedProvider', '');
+          const modelId = this.context.workspaceState.get('codie.selectedModelId', '');
+          console.log('[Codie] Selected provider/model:', providerName, modelId);
+          if (!providerName || !modelId) {
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'No AI provider/model selected.' });
+            return;
+          }
+          // Find the provider instance
+          let provider = undefined;
+          for (const p of this.providerRegistry.getProviders()) {
+            if (p.getName() === providerName) {
+              provider = p;
+              break;
+            }
+          }
+          if (!provider) {
+            console.error('[Codie] Provider not found:', providerName);
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: `Provider '${providerName}' not found.` });
+            return;
+          }
+          // Persona system prompt for Codie
+          const systemPrompt = 'You are Codie, a helpful AI assistant for VS Code users. Always refer to yourself as Codie.';
+          // Call sendMessage and send response
+          try {
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'Thinking...' });
+            console.log('[Codie] Calling provider.sendMessage...');
+            const aiResponse = await provider.sendMessage(modelId, userText, systemPrompt);
+            console.log('[Codie] AI response:', aiResponse);
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse || '(No response)' });
+          } catch (err: any) {
+            console.error('[Codie] Error in provider.sendMessage:', err);
+            let userMsg = `Error: ${err?.message || err}`;
+            const errStr = (err?.message || err || '').toString();
+            if (/404|not found|connection refused|ECONNREFUSED/i.test(errStr)) {
+              userMsg = 'Provider endpoint not found or not running. Please check that the selected provider is running and accessible.';
+            }
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: userMsg });
+          }
+          break;
+        }
+      }
+    });
+
+    // Send selected model/provider on load
+    setTimeout(sendSelectedModel, 300);
+
+    // Listen for selection changes and update webview
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('codie.selectedProvider') || e.affectsConfiguration('codie.selectedModelId')) {
+        sendSelectedModel();
       }
     });
   }
@@ -88,31 +201,11 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     const codieLogoUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'Codie.png'));
     return `
       <!DOCTYPE html>
-      <html lang="en">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="${styleUri}" rel="stylesheet">
         <link href="${codiconCssUri}" rel="stylesheet">
-        <style>
-          @font-face {
-            font-family: 'codicon';
-            src: url('${codiconFontUri}') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-            font-display: block;
-          }
-          .visually-hidden {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0,0,0,0);
-            border: 0;
-          }
-        </style>
+        <link href="${styleUri}" rel="stylesheet">
         <title>Codie Chat</title>
       </head>
       <body>
@@ -127,30 +220,31 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
                 <div class="codie-footer-content">
                   <form class="codie-input-form" autocomplete="off">
                     <div class="codie-input-row codie-input-row-top">
-                      <button class="codie-attach-btn" title="Add Context" aria-label="Add Context" type="button" style="display: flex; align-items: center; min-width: 110px; padding: 0.2em 0.7em;">
-                        <span class="codicon codicon-folder" style="font-size: 16px;"></span>
-                        <span style="margin-left:0.4em; font-size:7px;">Add Context...</span>
-                      </button>
+                      <a href="#" class="codie-attach-link" title="Add Context" aria-label="Add Context" role="button" tabindex="0" >
+                        <span class="codicon codicon-folder" style="font-size: 11px;"></span>
+                        <span style="margin-left:0.4em; font-size:10px;">Add Context...</span>
+                      </a>
                       <div class="codie-attached-items"></div>
                     </div>
                     <textarea class="codie-input" placeholder="Type your message..." aria-label="Chat input" rows="2"></textarea>
                     <div class="codie-input-row codie-input-row-bottom">
-                      <button class="codie-toolbar-btn" title="Model Picker" aria-label="Model Picker" type="button">
-                        <span class="codicon codicon-symbol-parameter"></span>
-                      </button>
-                      <button class="codie-toolbar-btn" title="Agent Mode" aria-label="Agent Mode" type="button">
-                        <span class="codicon codicon-person"></span>
-                      </button>
+                      <a href="#" class="codie-toolbar-link" id="codie-ai-provider-btn" title="AI Provider" aria-label="AI Provider" role="button" tabindex="0">
+                        <span class="codicon codicon-server-environment"></span>
+                      </a>
+                      <a href="#" class="codie-toolbar-link" id="codie-model-picker-btn" title="AI Model" aria-label="AI Model" role="button" tabindex="0">
+                        <span class="codicon codicon-hubot"></span>
+                      </a>
+                       <span id="codie-selected-model" style="margin-left:0.7em; font-size:10px; color:#fff; opacity:0.8;"></span>
                       <span style="flex:1 1 auto;"></span>
-                      <button class="codie-toolbar-btn" title="Voice Chat" aria-label="Voice Chat" type="button">
+                      <a href="#" class="codie-toolbar-link" title="Voice Chat" aria-label="Voice Chat" role="button" tabindex="0">
                         <span class="codicon codicon-mic"></span>
-                      </button>
-                      <button id="codie-tools-btn" class="codie-toolbar-btn" title="Tools" aria-label="Tools" type="button">
-                        <span class="codicon codicon-tools"></span>
-                      </button>
-                      <button class="codie-send-btn" type="submit" aria-label="Send">
+                      </a>
+                      <a href="#" id="codie-tools-btn" class="codie-toolbar-link" title="Tools" aria-label="Tools" role="button" tabindex="0">
+                        <span class="codicon codicon-debug-disconnect"></span>
+                      </a>
+                      <a href="#" id="codie-chat-send" class="codie-send-link" aria-label="Send" role="button" tabindex="0">
                         <span class="codicon codicon-send"></span>
-                      </button>
+                      </a>
                     </div>
                   </form>
                 </div>
@@ -158,13 +252,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             </div>
           </main>
         </div>
-        <script>
-          // Add event listener for the Tools button
-          const vscode = acquireVsCodeApi();
-          document.getElementById('codie-tools-btn')?.addEventListener('click', () => {
-            vscode.postMessage({ command: 'openToolsDropdown' });
-          });
-        </script>
+  <!-- Picker/model/tools button event listeners and selected model handler are now in main.js -->
         <script src="${scriptUri}"></script>
       </body>
       </html>
@@ -172,11 +260,97 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-
+// Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext) {
+
+  // Command to test connection to Foundry Local and check if models are running
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.testFoundryConnection', async () => {
+      // Dynamically import the SDK to avoid breaking extension activation if not installed
+      let FoundryLocalManager: any;
+      try {
+        ({ FoundryLocalManager } = await import('foundry-local-sdk'));
+      } catch (err) {
+        vscode.window.showErrorMessage('Could not import foundry-local-sdk. Please ensure it is installed.');
+        return;
+      }
+      // Try to auto-detect the service URL using the CLI
+      let serviceUrl: string | undefined;
+      try {
+        const { execSync } = await import('child_process');
+        const output = execSync('foundry service status', { encoding: 'utf-8' });
+        // Example output: 🟢 Model management service is running on http://127.0.0.1:60244/openai/status
+        let match = output.match(/on (http:\/\/[\w\d\.:\-]+)/);
+        if (match && match[1]) {
+          serviceUrl = match[1];
+        } else {
+          // Try to match full URL if /openai/status is present
+          const matchFull = output.match(/on (http:\/\/[\w\d\.:\-]+)\/openai\/status/);
+          if (matchFull && matchFull[1]) {
+            serviceUrl = matchFull[1];
+          }
+        }
+      } catch (err) {
+        // Ignore, will prompt user below if not found
+      }
+  // Try to get the service URL from settings first
+  serviceUrl = serviceUrl || vscode.workspace.getConfiguration().get('codie.foundry.serviceUrl');
+      if (!serviceUrl) {
+        serviceUrl = await vscode.window.showInputBox({
+          prompt: 'Could not auto-detect Foundry Local service URL. Please enter it (e.g. http://127.0.0.1:60244)',
+          placeHolder: 'http://127.0.0.1:60244',
+        });
+        if (!serviceUrl) {
+          vscode.window.showErrorMessage('No service URL provided.');
+          return;
+        }
+      }
+      try {
+        const manager = new FoundryLocalManager({ serviceUrl });
+        // List all available models in the catalog
+        const catalog = await manager.listCatalogModels();
+        // List all loaded models
+        const loaded = await manager.listLoadedModels();
+        const loadedIds = new Set((loaded || []).map((m: any) => m.id || m.alias));
+        const results: string[] = [];
+        for (const model of catalog) {
+          const isLoaded = loadedIds.has(model.id) || loadedIds.has(model.alias);
+          results.push(`${isLoaded ? '✅' : '❌'} ${model.displayName || model.name || model.id} (${isLoaded ? 'loaded' : 'not loaded'})`);
+        }
+        vscode.window.showInformationMessage(
+          `Foundry Local connection successful.\nService URL: ${serviceUrl}\nModel status:\n${results.join('\n')}`,
+          { modal: true }
+        );
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`Foundry Local connection failed: ${err?.message || err}`);
+      }
+    })
+  );
+  // Register command for creating a static port for Foundry
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.foundry.createStaticPort', async () => {
+      const port = await vscode.window.showInputBox({
+        prompt: 'Enter a unique port number for Foundry Local (must not conflict with other services)',
+        placeHolder: 'e.g. 60244',
+        validateInput: (value) => {
+          if (!/^[0-9]{4,5}$/.test(value)) return 'Enter a valid port number (4-5 digits)';
+          return null;
+        }
+      });
+      if (!port) return;
+      // Run CLI command
+      const terminal = vscode.window.createTerminal({ name: 'Foundry Static Port' });
+      terminal.show();
+      terminal.sendText(`foundry service set --port ${port}`);
+      // Save the service URL to settings
+      const serviceUrl = `http://localhost:${port}`;
+      await vscode.workspace.getConfiguration().update('codie.foundry.serviceUrl', serviceUrl, vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage(`Set Foundry Local static port to ${port} and saved service URL (${serviceUrl}) to settings. Make sure this port is unique and not in use by other services.`);
+    })
+  );
+  // Tool configuration and registration
   const config = vscode.workspace.getConfiguration();
-  // Register tools with ToolRegistry based on enable/disable settings
-  const toolConfigs: { id: string, label: string, description: string, module: any, setting: string }[] = [
+  const toolConfigs = [
     { id: 'changes', label: 'Changes', description: 'Get diffs of changed files', module: toolChanges, setting: 'codie.tools.changes.enabled' },
     { id: 'codebase', label: 'Codebase', description: 'Find relevant file chunks, symbols, and codebase info', module: toolCodebase, setting: 'codie.tools.codebase.enabled' },
     { id: 'editFiles', label: 'Edit Files', description: 'Edit files in your workspace', module: toolEditFiles, setting: 'codie.tools.editFiles.enabled' },
@@ -209,7 +383,7 @@ export function activate(context: vscode.ExtensionContext) {
       label: tool.label,
       description: tool.description,
       enabled,
-      execute: tool.module[tool.id] || (async () => { throw new Error('Not implemented'); })
+  execute: (tool.module as any)[tool.id] || (async () => { throw new Error('Not implemented'); })
     });
   }
 
@@ -244,21 +418,39 @@ export function activate(context: vscode.ExtensionContext) {
   // Backend: Provider registry and dynamic provider loading
   const providerRegistry = new ProviderRegistry();
 
-  // Always register DummyProvider for fallback/testing
-  providerRegistry.register(new DummyProvider());
+
+  // Debug: Log provider config values
+  const foundryEnabled = config.get('codie.providers.foundry.enabled', true);
+  const lmstudioEnabled = config.get('codie.providers.lmstudio.enabled', true);
+  const ollamaEnabled = config.get('codie.providers.ollama.enabled', true);
+  console.log('[Codie] Provider config:', {
+    foundryEnabled,
+    lmstudioEnabled,
+    ollamaEnabled
+  });
 
   // Register providers based on settings
-  if (config.get('codie.providers.foundry.enabled', true)) {
+  if (foundryEnabled) {
+    console.log('[Codie] Registering FoundryLocalProvider');
     providerRegistry.register(new FoundryLocalProvider());
+  } else {
+    console.log('[Codie] FoundryLocalProvider not enabled');
   }
-  if (config.get('codie.providers.lmstudio.enabled', true)) {
+  if (lmstudioEnabled) {
     const lmstudioEndpoint = config.get('codie.providers.lmstudio.endpoint', 'http://localhost:1234/v1');
+    console.log('[Codie] Registering LMStudioProvider at', lmstudioEndpoint);
     providerRegistry.register(new LMStudioProvider(lmstudioEndpoint));
+  } else {
+    console.log('[Codie] LMStudioProvider not enabled');
   }
-  if (config.get('codie.providers.ollama.enabled', true)) {
+  if (ollamaEnabled) {
     const ollamaEndpoint = config.get('codie.providers.ollama.endpoint', 'http://localhost:11434/v1');
+    console.log('[Codie] Registering OllamaProvider at', ollamaEndpoint);
     providerRegistry.register(new OllamaProvider(ollamaEndpoint));
+  } else {
+    console.log('[Codie] OllamaProvider not enabled');
   }
+
 
   // Example: Log all providers and their models at activation
   providerRegistry.getAllModels().then((all) => {
@@ -270,15 +462,85 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Register command to list providers/models and select one
+  // On startup, auto-load last selected provider/model if available
+  (async () => {
+    const lastProvider = context.workspaceState.get('codie.selectedProvider', '');
+    const lastModelId = context.workspaceState.get('codie.selectedModelId', '');
+    if (lastProvider && lastModelId) {
+      // Find the provider instance
+      let provider = undefined;
+      for (const p of providerRegistry.getProviders()) {
+        if (p.getName() === lastProvider) {
+          provider = p;
+          break;
+        }
+      }
+      if (provider) {
+        try {
+          await provider.setActiveModel(lastModelId);
+          console.log(`[Codie] Auto-loaded provider/model on startup: ${lastProvider} / ${lastModelId}`);
+        } catch (err: any) {
+          console.error(`[Codie] Failed to auto-load provider/model on startup: ${lastProvider} / ${lastModelId}:`, err);
+        }
+      }
+    }
+  })();
+
+  // Register command to list providers (QuickPick)
   context.subscriptions.push(
-    vscode.commands.registerCommand('codie.listModels', async () => {
+    vscode.commands.registerCommand('codie.listProviders', async () => {
+      // List all known providers (not just enabled ones)
+      const providerInfos = [
+        { key: 'foundry', name: 'FoundryLocal', getName: () => new FoundryLocalProvider().getName() },
+        { key: 'lmstudio', name: 'LM Studio', getName: () => new LMStudioProvider().getName() },
+        { key: 'ollama', name: 'Ollama', getName: () => new OllamaProvider().getName() },
+      ];
+      const config = vscode.workspace.getConfiguration();
+      const picks = providerInfos.map(info => {
+        const enabled = config.get(`codie.providers.${info.key}.enabled`, true);
+        return {
+          label: info.getName(),
+          picked: enabled,
+          id: info.key
+        };
+      });
+      const selected = await vscode.window.showQuickPick(picks, {
+        canPickMany: true,
+        placeHolder: 'Enable or disable AI providers',
+      });
+      if (selected) {
+        // Update config for each provider
+        const selectedIds = new Set(selected.map(s => s.id));
+        for (const info of providerInfos) {
+          const shouldEnable = selectedIds.has(info.key);
+          await config.update(`codie.providers.${info.key}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
+        }
+        // If the currently selected provider is now disabled, clear selection
+        const currentProvider = context.workspaceState.get('codie.selectedProvider', '');
+        const stillEnabled = providerInfos.find(info => info.getName() === currentProvider && selectedIds.has(info.key));
+        if (!stillEnabled) {
+          await context.workspaceState.update('codie.selectedProvider', '');
+          await context.workspaceState.update('codie.selectedModelId', '');
+          vscode.window.showInformationMessage('Current provider was disabled and selection cleared.');
+        } else {
+          vscode.window.showInformationMessage('Provider settings updated.');
+        }
+      }
+    })
+  );
+
+  // Register command to list models grouped by provider (QuickPick with groups)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.listModelsGrouped', async () => {
       const all = await providerRegistry.getAllModels();
-      const items: { label: string; description: string; provider: string; modelId: string }[] = [];
+      console.log('[Codie] listModelsGrouped: all providers/models:', all);
+      const items: Array<{ label: string; description?: string; provider?: string; modelId?: string; kind?: vscode.QuickPickItemKind }> = [];
       for (const { provider, models } of all) {
+        // Add group header
+        items.push({ label: provider.getName(), kind: vscode.QuickPickItemKind.Separator });
         for (const model of models) {
           items.push({
-            label: `${provider.getName()} — ${model.name}`,
+            label: model.name,
             description: model.description || '',
             provider: provider.getName(),
             modelId: model.id,
@@ -290,24 +552,56 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const picked = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select an AI provider and model',
+        placeHolder: 'Select an AI model (grouped by provider)',
+        matchOnDescription: true,
       });
-      if (picked) {
-        context.workspaceState.update('codie.selectedProvider', picked.provider);
-        context.workspaceState.update('codie.selectedModelId', picked.modelId);
-        vscode.window.showInformationMessage(`Selected: ${picked.label}`);
+      if (picked && picked.provider && picked.modelId) {
+        // Find the provider instance
+        let provider = undefined;
+        for (const p of providerRegistry.getProviders()) {
+          if (p.getName() === picked.provider) {
+            provider = p;
+            break;
+          }
+        }
+        if (!provider) {
+          vscode.window.showErrorMessage(`Provider '${picked.provider}' not found.`);
+          return;
+        }
+        // Try to load/set the model with the provider
+        try {
+          await provider.setActiveModel(picked.modelId);
+        } catch (err: any) {
+          vscode.window.showErrorMessage(`Failed to load model '${picked.label}' for provider '${picked.provider}': ${err?.message || err}`);
+          return;
+        }
+        await context.workspaceState.update('codie.selectedProvider', picked.provider);
+        await context.workspaceState.update('codie.selectedModelId', picked.modelId);
+        vscode.window.showInformationMessage(`Selected: ${picked.provider} — ${picked.label}`);
+        // Update the webview if open
+        codieChatViewProvider.updateSelectedModel();
       }
     })
   );
 
   // Register UI and data providers as before
-  const codieChatViewProvider = new CodieChatViewProvider(context);
+  const codieChatViewProvider = new CodieChatViewProvider(context, providerRegistry);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CodieChatViewProvider.viewType, codieChatViewProvider)
   );
   const codieDataProvider = new CodieDataProvider();
+
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('codie-data-view', codieDataProvider)
+  );
+
+  // Tree view: handle item click for 'Create Static Port'
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.treeView.itemClick', async (item: any) => {
+      if (item && item.type === 'foundry-static-port') {
+        await vscode.commands.executeCommand('codie.foundry.createStaticPort');
+      }
+    })
   );
 
   console.log('Codie extension: activate() called (MINIMAL)');

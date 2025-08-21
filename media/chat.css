@@ -1,396 +1,220 @@
-html, body {
-  height: 100%;
-  min-height: 0;
-  width: 100%;
-  margin: 0;
+/* === User Message Styling === */
+.codie-chat-message.user {
+	background: linear-gradient(90deg, #5a189a 0%, #2d0b4e 100%);
+	color: #fff;
+	border-radius: 16px 4px 16px 16px;
+	padding: 0.7em 1.2em;
+	margin: 0.5em 0 0.5em auto;
+	max-width: 70%;
+	float: right;
+	clear: both;
+	box-shadow: 0 2px 8px #0002;
+	text-align: right;
+	display: block;
+}
+
+/* Ensure AI/bot messages stay left and visually distinct */
+.codie-chat-message.bot {
+	background: var(--vscode-sideBar-background, #23272e);
+	color: #fff;
+	border-radius: 4px 16px 16px 16px;
+	padding: 0.7em 1.2em;
+	margin: 0.5em auto 0.5em 0;
+	max-width: 70%;
+	float: left;
+	clear: both;
+	box-shadow: 0 2px 8px #0002;
+	text-align: left;
+	display: block;
+}
+
+/* Ensure chat label and timestamp are styled for both */
+.codie-chat-label {
+	font-size: 0.8em;
+	opacity: 0.7;
+	margin-right: 0.7em;
+}
+.codie-chat-timestamp {
+	font-size: 0.75em;
+	opacity: 0.5;
+	margin-left: 0.7em;
+}
+/* === Chat Footer Button Alignment === */
+@font-face {
+  font-family: 'codicon';
+  src: url('${codiconFontUri}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
-  box-sizing: border-box;
-/* Hide list dots (bullets) in chat UI */
-/* .chat-input-container is not used in Codie, remove this block */
-/* .chat-input-container.focused is not used in Codie, remove this block */
-/* Remove selectorless block */
-/* Remove selectorless block */
-/* Remove selectorless block */
-}
-.codie-input-row-bottom {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.3em;
-  margin-top: 0.1em;
-  margin-bottom: 0;
-}
-/* Ensure top row is horizontal */
-.codie-input-row-top {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.3em;
-  margin-bottom: 0.1em;
-}
-.codie-input-row-bottom > span[style] {
-  flex: 1 1 auto;
-}
-.codie-input-form textarea.codie-input {
-  margin: 0.1em 0;
-  flex: 1 1 auto;
-  min-height: 2.2em;
-  max-height: 8em;
-  resize: vertical;
-  background: #3c3c3c;
-  border-color: #3c3c3c;
-  color: var(--vscode-input-foreground, #d4d4d4);
-  border-radius: 0
-}
-.codie-input-form > * {
-  flex: 0 0 auto;
-  margin: 0;
-}
-.chat-editor-container textarea,
-.ime-text-area {
-  border: none;
-  border-radius: 8px;
-  background: var(--vscode-input-background, #1e1e1e);
-  color: var(--vscode-input-foreground, #d4d4d4);
-  box-shadow: none;
-  padding: 0.7em 1em;
-  min-height: 2.2em;
-}
-/* .codie-input {
-  border: none;
-  border-radius: 0;
-  background: #3c3c3c;
-  color: #fff;
-  box-shadow: none;
-  padding: 0.7em 1em;
-  line-height: 1.5;
-  overflow-y: auto;
-  min-width: 0;
-  font-size: 1rem;
-  outline: none;
-  resize: vertical;
-  margin: 0;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  background: var(--vscode-input-background, #23272e);
-  gap: 0.75rem;
-  box-shadow: none;
-  flex-shrink: 0;
-  position: static;
-  bottom: auto;
-  z-index: auto;
-}*/
-/* Toolbar and button styling */
-.codie-attach-btn,
-.codie-send-btn,
-.codie-toolbar-btn {
-  background: #3c3c3c;
-  color: #fff;
-  border: none;
-  border-radius: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 1.2rem;
-  margin: 0;
-  box-shadow: none;
-}
-.codie-attach-btn {
-  border-radius: 8px 0 0 8px;
-  border-right: 1px solid var(--vscode-sideBar-border, #333);
-}
-.codie-send-btn {
-  background: #878787;
-  color: #fff;
-  border-radius: 0;
-  border-left: 1px solid var(--vscode-sideBar-border, #333);
-  width: 48px;
-  height: 40px;
-  margin-left: 0;
-}
-.codie-send-btn:active,
-.codie-send-btn:focus {
-  background: var(--vscode-button-background, #0e639c);
-  color: var(--vscode-button-foreground, #fff);
-}
-.codie-attach-btn:active,
-.codie-attach-btn:focus,
-.codie-toolbar-btn:active,
-.codie-toolbar-btn:focus {
-  background: var(--vscode-button-hoverBackground, #2a2d2e);
-  color: var(--vscode-button-foreground, #fff);
-}
-.codie-toolbar-btn {
-  border-radius: 0 8px 8px 0;
-  border-left: 1px solid var(--vscode-sideBar-border, #333);
-  width: 40px;
-  height: 40px;
-}
-.chat-input-toolbar,
-.chat-execute-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-  margin-top: 0.2em;
-}
-.codie-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin-left: 0.2em;
-}
-.chat-input-toolbar .chat-tool,
-.chat-execute-toolbar .chat-tool {
-  background: transparent;
-  color: var(--vscode-icon-foreground, #c5c5c5);
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 1.1rem;
-  margin: 0 0.05em;
-  box-shadow: none;
-}
-.chat-input-toolbar .chat-tool:hover,
-.chat-execute-toolbar .chat-tool:hover {
-  background: var(--vscode-button-hoverBackground, #2a2d2e);
-  color: var(--vscode-button-foreground, #fff);
-}
-.chat-input-toolbar .chat-send,
-.chat-execute-toolbar .chat-send {
-  background: var(--vscode-button-background, #0e639c);
-  color: var(--vscode-button-foreground, #fff);
-  border: none;
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 1.2rem;
-  margin-left: 0.2em;
-  box-shadow: none;
-}
-.chat-input-toolbars > .chat-execute-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-}
-.chat-input-toolbar .chat-send:hover,
-.chat-execute-toolbar .chat-send:hover {
-  background: var(--vscode-button-hoverBackground, #1177bb);
-  color: var(--vscode-button-foreground, #fff);
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
 }
 
 
-body {
+.codie-input-row.codie-input-row-bottom {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.3em;
+}
+
+/* Group left (model/agent) and right (voice/tools/send) buttons */
+.codie-input-row.codie-input-row-bottom .codie-toolbar-link:nth-child(1),
+.codie-input-row.codie-input-row-bottom .codie-toolbar-link:nth-child(2) {
+	margin-right: 0.2em;
+}
+.codie-input-row.codie-input-row-bottom .codie-toolbar-link:nth-last-child(3),
+.codie-input-row.codie-input-row-bottom .codie-toolbar-link:nth-last-child(2),
+.codie-input-row.codie-input-row-bottom .codie-send-link {
+	margin-left: 0.2em;
+}
+
+/* Ensure the flexible spacer expands */
+.codie-input-row.codie-input-row-bottom span[style*="flex:1 1 auto"] {
+	flex: 1 1 auto !important;
+	min-width: 0;
+}
+/* === Chat Layout Flex Foundation === */
+body{
   padding: 0;
-  margin: 0;
-  font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
-  background: var(--vscode-editor-background, #1e1e1e);
-  color: var(--vscode-editor-foreground, #d4d4d4);
+}
+
+/* Ensure chat main fills available space and allows children to grow */
+.codie-chat-main {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 .codie-chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
-  background: var(--vscode-editor-background, #1e1e1e);
-  box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	width: 100vw;
+	background: var(--vscode-editor-background, #1e1e1e);
+	overflow: hidden;
 }
 
-.codie-logo {
-  width: 20%;
-  display: block;
-  margin: 0 auto;
-}
-
-.codie-chat-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  background: transparent;
-  padding: 0.5em 0 0.5em 0;
-}
-
-.codie-chat-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2em;
+.codie-chat-footer {
+	display: flex;
+	flex: 0 0 auto;
+	flex-shrink: 0;
+	background: var(--vscode-input-background, #23272e);
+	border-top: 1px solid var(--vscode-sideBar-border, #333);
+	box-shadow: 0 -2px 12px 0 #0002;
+	padding: 0.15em 0.6em 0.15em 0.6em;
+	align-items: stretch;
+	z-index: 2;
+	border: 1.5px solid transparent;
+	transition: border-color 0.15s;
+	overflow: visible;
+	margin-top: auto;
 }
 
 .codie-chat-area-shell {
-  flex: 1 1 0%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 95%;
-  margin: 1%;
+	flex: 1 1 0;
+	flex-grow: 1;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 }
-.codie-footer-content {
-  width: 100%;
-}
-.codie-attached-items {
-  display: flex;
-  align-items: center;
-  gap: 0.4em;
-  margin-left: 0.5em;
-}
-.codie-attached-item {
-  background: #23272e;
-  color: #fff;
-  border-radius: 4px;
-  padding: 0.2em 0.6em;
-  font-size: 0.97em;
-  border: 1px solid var(--vscode-sideBar-border, #333);
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-}
-.codie-chat-footer {
-  display: flex;
-  align-items: center;
-  background: var(--vscode-input-background, #23272e);
-  gap: 0.75rem;
-  box-shadow: none;
-  flex-shrink: 0;
-  position: static;
-  bottom: auto;
-  z-index: auto;
-  width: 100%;
-  margin: 0;
-  padding: 0 1%;
-}
-.codie-input-form {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.3em;
-  background: #3c3c3c;
-  box-shadow: 0 1px 4px 0 #0003;
-  padding: 0.3em 0 0.3em 0;
-  /* width: 100%; */
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  border: none;
-  border-radius: 0;
-}
-.codie-chat-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0%;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  background: var(--vscode-input-background, #23272e);
-}
+
 .codie-chat-messages {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0%;
-  min-height: 0;
-  gap: 0.75rem;
-  padding: 0;
-  width: 100%;
-  margin: 0;
-}
-.codie-chat-controls-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5em;
-  margin-top: 0.2em;
-  margin-bottom: 0.1em;
-  padding: 0 0.2em;
-  font-size: 0.97em;
-  color: var(--vscode-descriptionForeground, #b3b3b3);
+	flex: 1 1 0;
+	flex-grow: 1;
+	flex-shrink: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	min-height: 0;
+	padding: 0.2em 0.5em;
+	background: transparent;
 }
 
-.codie-chat-controls-row .codie-provider,
-.codie-chat-controls-row .codie-ai-list {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-  background: transparent;
-  border-radius: 1em;
-  padding: 0.1em 0.7em 0.1em 0.5em;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.codie-chat-controls-row .codie-provider:hover,
-.codie-chat-controls-row .codie-ai-list:hover {
-  background: var(--vscode-toolbar-hoverBackground, #23272e);
+.codie-footer-content {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	align-items: stretch;
+	overflow: visible;
 }
 
-.codie-chat-actions-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.1em;
+.codie-input-form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+	background: transparent;
+	border: none;
+	margin: 0;
+	padding: 0;
 }
 
-.codie-chat-tool {
-  background: transparent;
-  color: var(--vscode-icon-foreground, #c5c5c5);
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 1.1rem;
-  margin: 0 0.05em;
-  box-shadow: none;
-}
-.codie-chat-tool:hover {
-  background: var(--vscode-button-hoverBackground, #2a2d2e);
-  color: var(--vscode-button-foreground, #fff);
-}
-
-.codie-chat-send {
-  background: var(--vscode-button-background, #0e639c);
-  color: var(--vscode-button-foreground, #fff);
-  border: none;
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 1.2rem;
-  margin-left: 0.2em;
-  box-shadow: none;
-}
-.codie-chat-send:hover {
-  background: var(--vscode-button-hoverBackground, #1177bb);
-  color: var(--vscode-button-foreground, #fff);
+.codie-input-form textarea.codie-input {
+	width: 100%;
+	height: auto;
+	min-height: 1.8em;
+	max-height: 21.6em;
+	overflow-y: auto;
+	resize: none;
+	background: var(--vscode-input-background, #23272e);
+	color: var(--vscode-input-foreground, #d4d4d4);
+	border: none;
+	outline: none;
+	border-radius: 10px;
+	box-shadow: none;
+	padding: 0.8em 1em;
+	font-size: 0.88em;
+	margin: 0;
+	box-sizing: border-box;
+	transition: background 0.15s, box-shadow 0.15s;
+	line-height: 1.8em;
 }
 
-.codicon {
-  vertical-align: middle;
-  font-size: 1.2em;
+.codie-input-form textarea.codie-input:focus {
+	background: var(--vscode-input-background, #23272e);
+}
+
+.codie-chat-footer:focus-within {
+	border-color: var(--vscode-focusBorder, #1177bb);
+}
+/* === Chat Input Buttons: White Icons === */
+.codie-toolbar-link,
+.codie-send-link {
+	color: #fff !important;
+}
+.codie-toolbar-link .codicon,
+.codie-send-link .codicon {
+	color: #fff !important;
+	fill: #fff !important;
+}
+.codie-toolbar-link:focus,
+.codie-toolbar-link:hover,
+.codie-send-link:focus,
+.codie-send-link:hover,
+.codie-attach-link:focus,
+.codie-attach-link:hover {
+	color: #fff !important;
+	opacity: 0.85;
+}
+
+.codie-attach-link {
+  display: flex; 
+  align-items: center; 
+  max-width: 80px; 
+  padding: 0.2em 0.2em;
+  text-decoration: none;
+  color: #fff;
+  border: 1px solid var(--vscode-chat-requestBorder, var(--vscode-input-background, transparent));
+  border-radius: 4px;
 }
