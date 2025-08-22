@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-  "types": ["vscode", "node"],
+    "types": ["vscode", "node"],
     "module": "commonjs",
     "target": "es2020",
     "outDir": "dist",
@@ -10,7 +10,9 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
   "include": ["src", "test", "tools"],
   "exclude": ["context"]
