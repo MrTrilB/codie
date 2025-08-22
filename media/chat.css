@@ -1,3 +1,27 @@
+/* === Inline style replacements for CodieChatHeader === */
+.codie-logo-centered {
+	width: 20%;
+	display: block;
+	margin: 0 auto;
+}
+/* === Inline style replacements for React === */
+.codie-font-11 {
+	font-size: 11px !important;
+}
+.codie-add-context-label {
+	margin-left: 0.4em;
+	font-size: 10px;
+}
+.codie-selected-model {
+	margin-left: 0.7em;
+	font-size: 10px;
+	color: #fff;
+	opacity: 0.8;
+}
+.codie-flex-spacer {
+	flex: 1 1 auto !important;
+	min-width: 0;
+}
 /* === User Message Styling === */
 .codie-chat-message.user {
 	background: linear-gradient(90deg, #5a189a 0%, #2d0b4e 100%);
