@@ -133,6 +133,71 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
         case 'getSelectedModel':
           sendSelectedModel();
           break;
+        case 'openAddContextPicker': {
+          // Show QuickPick for context sources and files
+          try {
+            // Context source options (like Copilot Chat)
+            const contextSources: vscode.QuickPickItem[] = [
+              { label: 'Open Editors', description: 'Currently open editors' },
+              { label: 'Files & Folders...', description: 'Browse files and folders' },
+              { label: 'Instructions...', description: 'Add instructions as context' },
+              { label: 'Screenshot Window', description: 'Take a screenshot and attach' },
+              { label: 'Source Control...', description: 'Attach source control info' },
+              { label: 'Problems...', description: 'Attach problems/diagnostics' },
+              { label: 'Symbols...', description: 'Attach workspace symbols' },
+              { label: 'Tools...', description: 'Attach tool output or config' },
+            ];
+            // Find up to 200 files in the workspace (adjust as needed)
+            const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 200);
+            const fileItems: vscode.QuickPickItem[] = uris.map(uri => ({
+              label: vscode.workspace.asRelativePath(uri),
+              description: uri.fsPath,
+              detail: '',
+              alwaysShow: false,
+              picked: false,
+              // @ts-ignore
+              uri: uri.toString()
+            }));
+            // Compose the QuickPick list: sources, separator, files
+            const items: vscode.QuickPickItem[] = [
+              ...contextSources.map(item => ({ ...item, kind: vscode.QuickPickItemKind.Default })),
+              { label: '', kind: vscode.QuickPickItemKind.Separator },
+              ...fileItems
+            ];
+            // Show multi-select QuickPick
+            const picked = await vscode.window.showQuickPick(items, {
+              canPickMany: true,
+              placeHolder: 'Add context: choose a source or files',
+              matchOnDescription: true,
+              matchOnDetail: true
+            });
+            if (picked && picked.length > 0) {
+              // If any context source is picked, send those as a special message
+              const pickedSources = picked.filter(p => contextSources.some(cs => cs.label === p.label));
+              if (pickedSources.length > 0) {
+                webviewView.webview.postMessage({
+                  command: 'addContextSource',
+                  sources: pickedSources.map(s => s.label)
+                });
+              }
+              // If any files are picked, send as before
+              const pickedFiles = picked.filter(p => p.description && uris.some(u => u.fsPath === p.description));
+              if (pickedFiles.length > 0) {
+                webviewView.webview.postMessage({
+                  command: 'addContext',
+                  items: pickedFiles.map(item => ({
+                    label: item.label,
+                    description: item.description,
+                    uri: (item as any).uri
+                  }))
+                });
+              }
+            }
+          } catch (err) {
+            vscode.window.showErrorMessage('Error selecting context: ' + ((err && (err as any).message) ? (err as any).message : err));
+          }
+          break;
+        }
         case 'userChatMessage': {
           // Debug: log message receipt
           console.log('[Codie] Received userChatMessage from webview:', msg);

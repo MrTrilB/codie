@@ -29,78 +29,45 @@ function showContextDropdown() {
   `;
   dropdown.style.display = 'block';
   // Request file/folder list from extension
-  if (window.vscode) {
-    window.vscode.postMessage({ command: 'getWorkspaceFilesAndFolders' });
-  }
-  // Confirm button handler
-  setTimeout(() => {
-    const confirmBtn = document.getElementById('codie-context-confirm-btn');
-    if (confirmBtn) {
-      confirmBtn.onclick = function() {
-        const checked = Array.from(dropdown.querySelectorAll('input[type=checkbox]:checked'));
-        const selected = checked.map(cb => cb.value);
-        if (window.vscode && selected.length > 0) {
-          window.vscode.postMessage({ command: 'addContext', items: selected });
-        }
-        hideContextDropdown();
-      };
-    }
-  }, 100);
 }
-
-function hideContextDropdown() {
-  const dropdown = document.getElementById('codie-context-dropdown');
-  if (dropdown) dropdown.style.display = 'none';
-}
-
-document.addEventListener('click', function(e) {
-  const dropdown = document.getElementById('codie-context-dropdown');
-  if (dropdown && dropdown.style.display === 'block') {
-    if (!dropdown.contains(e.target) && e.target.id !== 'codie-add-context-btn') {
-      hideContextDropdown();
+document.addEventListener('DOMContentLoaded', function() {
+  if (!window.vscode) {
+    // VS Code webview API is injected after DOMContentLoaded in some cases
+    if (typeof acquireVsCodeApi === 'function') {
+      window.vscode = acquireVsCodeApi();
+      console.log('[Codie] window.vscode initialized via acquireVsCodeApi');
+    } else {
+      console.warn('[Codie] window.vscode is not defined and acquireVsCodeApi is not available!');
     }
   }
-});
 
-window.addEventListener('DOMContentLoaded', function() {
-  // Attach to the Add Context button by id
-  const addContextBtn = document.getElementById('codie-add-context-btn');
-  if (addContextBtn) {
-    addContextBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      const dropdown = createContextDropdown();
-      if (dropdown.style.display === 'block') {
-        hideContextDropdown();
-      } else {
-        showContextDropdown();
-      }
-    });
-  }
-});
-// Only call acquireVsCodeApi() ONCE and reuse
-window.vscode = window.vscode || (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined);
-
-// Picker/model/tools button event listeners and selected model handler
-if (window.vscode) {
   document.getElementById('codie-tools-btn')?.addEventListener('click', function() {
-    window.vscode.postMessage({ command: 'openToolsDropdown' });
+    // ...existing code...
   });
-  document.getElementById('codie-ai-provider-btn')?.addEventListener('click', function(e) {
-    e.preventDefault();
-    window.vscode.postMessage({ command: 'openProviderSettings' });
-  });
-  document.getElementById('codie-model-picker-btn')?.addEventListener('click', function(e) {
-    e.preventDefault();
-    window.vscode.postMessage({ command: 'openModelPicker' });
-  });
-  // Request selected model/provider on load
-  window.vscode.postMessage({ command: 'getSelectedModel' });
-}
-// Listen for selectedModel message
 
+  document.addEventListener('click', function(e) {
+    const target = e.target.closest('#codie-add-context-btn');
+    if (target) {
+      e.preventDefault();
+      console.log('[Codie] Add Context button clicked');
+      if (window.vscode) {
+        console.log('[Codie] Posting openAddContextPicker to extension');
+        window.vscode.postMessage({ command: 'openAddContextPicker' });
+      } else {
+        console.warn('[Codie] window.vscode is not defined at button click!');
+      }
+    }
+  });
+});
+
+// Maintain attached context state
+let attachedSources = [];
+let attachedFiles = [];
 
 window.addEventListener('message', function(event) {
   var msg = event.data;
+  // Debug: log all messages
+  console.log('[Codie] Webview received message:', msg);
   // Handle selectedModel
   if (msg && msg.command === 'selectedModel') {
     var el = document.getElementById('codie-selected-model');
@@ -114,6 +81,30 @@ window.addEventListener('message', function(event) {
         text = 'No AI selected';
       }
       el.textContent = text;
+    }
+  }
+
+  // Handle addContext: update attached items UI (files)
+  if (msg && msg.command === 'addContext') {
+    console.log('[Codie] Received addContext message:', msg.items);
+    var items = msg.items || [];
+    var container = document.querySelector('.codie-attached-items');
+    if (container) {
+      // Only update attachedFiles, keep attachedSources
+      attachedFiles = items.map(item => ({ label: item.label, description: item.description, uri: item.uri }));
+      renderAttachedChips(container);
+    }
+  }
+
+  // Handle addContextSource: update attached items UI (sources)
+  if (msg && msg.command === 'addContextSource') {
+    console.log('[Codie] Received addContextSource message:', msg.sources);
+    var sources = msg.sources || [];
+    var container = document.querySelector('.codie-attached-items');
+    if (container) {
+      // Only update attachedSources, keep attachedFiles
+      attachedSources = sources;
+      renderAttachedChips(container);
     }
   }
   // Handle workspace files/folders for context dropdown
@@ -132,6 +123,50 @@ window.addEventListener('message', function(event) {
     }
   }
 });
+
+function renderAttachedChips(container) {
+  container.innerHTML = '';
+  // Render source chips
+  attachedSources.forEach(function(source, idx) {
+    var chip = document.createElement('span');
+    chip.className = 'codie-attached-item source';
+    chip.title = source;
+    chip.textContent = source;
+    // Add remove button
+    var removeBtn = document.createElement('span');
+    removeBtn.className = 'codie-chip-remove';
+    removeBtn.textContent = ' ×';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cursor = 'pointer';
+    removeBtn.onclick = function(e) {
+      e.stopPropagation();
+      attachedSources = attachedSources.filter((_, i) => i !== idx);
+      renderAttachedChips(container);
+    };
+    chip.appendChild(removeBtn);
+    container.appendChild(chip);
+  });
+  // Render file chips
+  attachedFiles.forEach(function(item, idx) {
+    var chip = document.createElement('span');
+    chip.className = 'codie-attached-item file';
+    chip.title = item.description || item.label;
+    chip.textContent = item.label;
+    // Add remove button
+    var removeBtn = document.createElement('span');
+    removeBtn.className = 'codie-chip-remove';
+    removeBtn.textContent = ' ×';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cursor = 'pointer';
+    removeBtn.onclick = function(e) {
+      e.stopPropagation();
+      attachedFiles = attachedFiles.filter((_, i) => i !== idx);
+      renderAttachedChips(container);
+    };
+    chip.appendChild(removeBtn);
+    container.appendChild(chip);
+  });
+}
 
 // Main chat UI logic
 const chatMessages = document.getElementById('codie-chat-messages');
