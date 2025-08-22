@@ -126,12 +126,19 @@ window.addEventListener('message', function(event) {
 
 function renderAttachedChips(container) {
   container.innerHTML = '';
-  // Render source chips
+  // Render source chips (with icons for special types)
   attachedSources.forEach(function(source, idx) {
     var chip = document.createElement('span');
     chip.className = 'codie-attached-item source';
     chip.title = source;
-    chip.textContent = source;
+    // Icon for screenshot or commit
+    if (source.toLowerCase().includes('screenshot')) {
+      chip.innerHTML = '<span class="codicon codicon-device-camera" style="font-size:12px;margin-right:2px;"></span>' + source;
+    } else if (source.toLowerCase().includes('commit')) {
+      chip.innerHTML = '<span class="codicon codicon-git-commit" style="font-size:12px;margin-right:2px;"></span>' + source;
+    } else {
+      chip.textContent = source;
+    }
     // Add remove button
     var removeBtn = document.createElement('span');
     removeBtn.className = 'codie-chip-remove';
