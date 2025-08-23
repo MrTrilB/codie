@@ -1,3 +1,39 @@
+/* === Codie Chat Header Styles === */
+.codie-chat-header {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  background: var(--vscode-sideBar-background, #23272e);
+  border-bottom: 2.5px solid var(--vscode-activityBar-activeBorder, #4F8EF7);
+  padding: 0.7em 0.9em 0.7em 0.9em;
+  min-height: 3.5em;
+  box-shadow: 0 2px 8px #0002;
+  z-index: 10;
+}
+.codie-header-logo {
+	height: 4.2em;
+	width: 4.2em;
+	border-radius: 6px;
+	background: transparent;
+	object-fit: contain;
+	box-shadow: 0 1px 4px #0002;
+}
+.codie-header-title {
+	font-size: 1.35em;
+	font-weight: 700;
+	color: var(--vscode-sideBarTitle-foreground, #fff);
+	letter-spacing: 0.01em;
+	margin-right: 0.5em;
+}
+.codie-header-subtitle {
+	font-size: 0.98em;
+	font-weight: 400;
+	color: var(--vscode-descriptionForeground, #b0b0b0);
+	opacity: 0.85;
+	margin-left: 0.2em;
+}
 /* === Tools Dropdown Styles === */
 .codie-tools-dropdown {
 	position: absolute;

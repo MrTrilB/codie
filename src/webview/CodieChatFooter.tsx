@@ -422,6 +422,24 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
                   <span className="codicon codicon-debug-disconnect"></span>
                 </a>
                 {/* Tools dropdown removed; handled by VS Code QuickPick */}
+                <a
+                  href="#"
+                  id="codie-send-btn"
+                  className="codie-send-link"
+                  title="Send Message"
+                  aria-label="Send Message"
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleSend}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                >
+                  <span className="codicon codicon-send"></span>
+                </a>
               </div>
             </form>
           </div>
