@@ -119,8 +119,80 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
     // Listen for messages from the webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
-      if (!msg || !msg.command) return;
-      switch (msg.command) {
+  if (!msg || !msg.command) return;
+  switch (msg.command) {
+    case 'openToolSettings': {
+      // Open the VS Code QuickPick for managing tools
+      await vscode.commands.executeCommand('codie.tools.manage');
+      break;
+    }
+        case 'getModelsForProvider': {
+          // Get models for the requested provider
+          const providerKey = msg.provider;
+          console.log('[Codie] getModelsForProvider: requested key:', providerKey);
+          let provider = undefined;
+          for (const p of this.providerRegistry.getProviders()) {
+            const pKey = (p as any).key || '';
+            const pName = p.getName();
+            console.log('[Codie] getModelsForProvider: checking provider', { key: pKey, name: pName });
+            if (
+              pKey === providerKey ||
+              pName === providerKey ||
+              pName.toLowerCase() === providerKey.toLowerCase()
+            ) {
+              provider = p;
+              break;
+            }
+          }
+          if (!provider) {
+            console.warn('[Codie] getModelsForProvider: No provider found for key', providerKey);
+            webviewView.webview.postMessage({ command: 'modelList', models: [] });
+            return;
+          }
+          try {
+            const models = await provider.listModels();
+            console.log('[Codie] getModelsForProvider: models returned:', models);
+            // Send as array of { key, label }
+            const modelList = (models || []).map((m: any) => ({ key: m.id, label: m.name }));
+            webviewView.webview.postMessage({ command: 'modelList', models: modelList });
+          } catch (err) {
+            console.error('[Codie] getModelsForProvider: error calling listModels:', err);
+            webviewView.webview.postMessage({ command: 'modelList', models: [] });
+          }
+          break;
+        }
+        case 'setModel': {
+          // Set selected model in workspace state and notify webview
+          const modelId = msg.model;
+          if (!modelId) return;
+          // Use current provider from workspace state
+          const providerKey = this.context.workspaceState.get('codie.selectedProvider', '');
+          let provider = undefined;
+          for (const p of this.providerRegistry.getProviders()) {
+            const pKey = (p as any).key || '';
+            const pName = p.getName();
+            if (
+              pKey === providerKey ||
+              pName === providerKey ||
+              pName.toLowerCase() === providerKey.toLowerCase()
+            ) {
+              provider = p;
+              break;
+            }
+          }
+          if (provider && typeof provider.setActiveModel === 'function') {
+            try {
+              await provider.setActiveModel(modelId);
+            } catch (err) {
+              // Ignore errors for now
+            }
+          }
+          await this.context.workspaceState.update('codie.selectedModelId', modelId);
+          // Notify webview of new selection
+          const providerName = provider ? provider.getName() : providerKey;
+          webviewView.webview.postMessage({ command: 'selectedModel', provider: providerName, model: modelId });
+          break;
+        }
         case 'openToolsDropdown':
           await vscode.commands.executeCommand('codie.tools.manage');
           break;
@@ -133,6 +205,15 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
         case 'getSelectedModel':
           sendSelectedModel();
           break;
+        case 'setProvider': {
+          // Save selected provider in workspace state and notify webview
+          const provider = msg.provider;
+          if (provider) {
+            await this.context.workspaceState.update('codie.selectedProvider', provider);
+            sendSelectedModel();
+          }
+          break;
+        }
         case 'openAddContextPicker': {
           // Show QuickPick for context sources only (single-select, Copilot-style)
           try {
@@ -255,7 +336,8 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
   private getHtmlForWebview(webview: vscode.Webview): string {
     const extensionUri = this.context.extensionUri;
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
+  const mainScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
+  const reactBundleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chat.css'));
     const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.css'));
     const codiconFontUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.ttf'));
@@ -270,51 +352,10 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
         <title>Codie Chat</title>
       </head>
       <body>
-        <div class="codie-chat-container">
-          <header class="codie-chat-header">
-            <img src="${codieLogoUri}" alt="Codie Logo" class="codie-logo" style="width:20%;display:block;margin:0 auto;" />
-          </header>
-          <main class="codie-chat-main">
-            <div class="codie-chat-area-shell">
-              <div id="codie-chat-messages" class="codie-chat-messages"></div>
-              <footer class="codie-chat-footer">
-                <div class="codie-footer-content">
-                  <form class="codie-input-form" autocomplete="off">
-                    <div class="codie-input-row codie-input-row-top">
-                      <a href="#" class="codie-attach-link" id="codie-add-context-btn" title="Add Context" aria-label="Add Context" role="button" tabindex="0">
-                        <span class="codicon codicon-folder" style="font-size: 11px;"></span>
-                        <span style="margin-left:0.4em; font-size:10px;">Add Context...</span>
-                      </a>
-                      <div class="codie-attached-items"></div>
-                    </div>
-                    <textarea class="codie-input" placeholder="Type your message..." aria-label="Chat input" rows="2"></textarea>
-                    <div class="codie-input-row codie-input-row-bottom">
-                      <a href="#" class="codie-toolbar-link" id="codie-ai-provider-btn" title="AI Provider" aria-label="AI Provider" role="button" tabindex="0">
-                        <span class="codicon codicon-server-environment"></span>
-                      </a>
-                      <a href="#" class="codie-toolbar-link" id="codie-model-picker-btn" title="AI Model" aria-label="AI Model" role="button" tabindex="0">
-                        <span class="codicon codicon-hubot"></span>
-                      </a>
-                       <span id="codie-selected-model" style="margin-left:0.7em; font-size:10px; color:#fff; opacity:0.8;"></span>
-                      <span style="flex:1 1 auto;"></span>
-                      <a href="#" class="codie-toolbar-link" title="Voice Chat" aria-label="Voice Chat" role="button" tabindex="0">
-                        <span class="codicon codicon-mic"></span>
-                      </a>
-                      <a href="#" id="codie-tools-btn" class="codie-toolbar-link" title="Tools" aria-label="Tools" role="button" tabindex="0">
-                        <span class="codicon codicon-debug-disconnect"></span>
-                      </a>
-                      <a href="#" id="codie-chat-send" class="codie-send-link" aria-label="Send" role="button" tabindex="0">
-                        <span class="codicon codicon-send"></span>
-                      </a>
-                    </div>
-                  </form>
-                </div>
-              </footer>
-            </div>
-          </main>
-        </div>
-  <!-- Picker/model/tools button event listeners and selected model handler are now in main.js -->
-        <script src="${scriptUri}"></script>
+        <div id="root"></div>
+        <!-- main.js initializes window.vscode, then React bundle renders UI -->
+        <script src="${mainScriptUri}"></script>
+        <script src="${reactBundleUri}"></script>
       </body>
       </html>
     `;
@@ -412,29 +453,29 @@ export function activate(context: vscode.ExtensionContext) {
   // Tool configuration and registration
   const config = vscode.workspace.getConfiguration();
   const toolConfigs = [
-    { id: 'changes', label: 'Changes', description: 'Get diffs of changed files', module: toolChanges, setting: 'codie.tools.changes.enabled' },
-    { id: 'codebase', label: 'Codebase', description: 'Find relevant file chunks, symbols, and codebase info', module: toolCodebase, setting: 'codie.tools.codebase.enabled' },
-    { id: 'editFiles', label: 'Edit Files', description: 'Edit files in your workspace', module: toolEditFiles, setting: 'codie.tools.editFiles.enabled' },
-    { id: 'extensi', label: 'Extensi', description: 'VS Code Extensions Marketplace integration', module: toolExtensi, setting: 'codie.tools.extensi.enabled' },
-    { id: 'fetch', label: 'Fetch', description: 'Fetch the main content from a web page', module: toolFetch, setting: 'codie.tools.fetch.enabled' },
-    { id: 'findTestFiles', label: 'Find Test Files', description: 'Find test files for a given source or test file', module: toolFindTestFiles, setting: 'codie.tools.findTestFiles.enabled' },
-    { id: 'githubRepo', label: 'GitHub Repo', description: 'Search a GitHub repository for code snippets', module: toolGithubRepo, setting: 'codie.tools.githubRepo.enabled' },
-    { id: 'new', label: 'New', description: 'Scaffold a new workspace with VS Code configs', module: toolNew, setting: 'codie.tools.new.enabled' },
-    { id: 'openSimpleBrowser', label: 'Open Simple Browser', description: 'Preview a locally hosted website', module: toolOpenSimpleBrowser, setting: 'codie.tools.openSimpleBrowser.enabled' },
-    { id: 'problems', label: 'Problems', description: 'Check errors for a particular file', module: toolProblems, setting: 'codie.tools.problems.enabled' },
-    { id: 'runCommands', label: 'Run Commands', description: 'Run commands in the terminal', module: toolRunCommands, setting: 'codie.tools.runCommands.enabled' },
-    { id: 'runNotebooks', label: 'Run Notebooks', description: 'Run notebook cells', module: toolRunNotebooks, setting: 'codie.tools.runNotebooks.enabled' },
-    { id: 'runTasks', label: 'Run Tasks', description: 'Run tasks and get their output', module: toolRunTasks, setting: 'codie.tools.runTasks.enabled' },
-    { id: 'runTests', label: 'Run Tests', description: 'Run unit tests', module: toolRunTests, setting: 'codie.tools.runTests.enabled' },
-    { id: 'search', label: 'Search', description: 'Search and read files in your workspace', module: toolSearch, setting: 'codie.tools.search.enabled' },
-    { id: 'searchResults', label: 'Search Results', description: 'Get results from the search view', module: toolSearchResults, setting: 'codie.tools.searchResults.enabled' },
-    { id: 'terminalLastCommand', label: 'Terminal Last Command', description: 'Get the last command run in the terminal', module: toolTerminalLastCommand, setting: 'codie.tools.terminalLastCommand.enabled' },
-    { id: 'terminalSelection', label: 'Terminal Selection', description: 'Get the current selection in the terminal', module: toolTerminalSelection, setting: 'codie.tools.terminalSelection.enabled' },
-    { id: 'testFailure', label: 'Test Failure', description: 'Get info about the last unit test failure', module: toolTestFailure, setting: 'codie.tools.testFailure.enabled' },
-    { id: 'think', label: 'Think', description: 'Deep thinking and task organization', module: toolThink, setting: 'codie.tools.think.enabled' },
-    { id: 'todos', label: 'Todos', description: 'Manage and track todo items', module: toolTodos, setting: 'codie.tools.todos.enabled' },
-    { id: 'usages', label: 'Usages', description: 'Find symbol usages', module: toolUsages, setting: 'codie.tools.usages.enabled' },
-    { id: 'vscodeAPI', label: 'VS Code API', description: 'VS Code API reference and documentation', module: toolVscodeAPI, setting: 'codie.tools.vscodeAPI.enabled' },
+    { id: 'changes', label: 'Changes', icon: 'diff', description: 'Get diffs of changed files', module: toolChanges, setting: 'codie.tools.changes.enabled' },
+    { id: 'codebase', label: 'Codebase', icon: 'repo', description: 'Find relevant file chunks, symbols, and codebase info', module: toolCodebase, setting: 'codie.tools.codebase.enabled' },
+    { id: 'editFiles', label: 'Edit Files', icon: 'edit', description: 'Edit files in your workspace', module: toolEditFiles, setting: 'codie.tools.editFiles.enabled' },
+    { id: 'extensi', label: 'Extensi', icon: 'extensions', description: 'VS Code Extensions Marketplace integration', module: toolExtensi, setting: 'codie.tools.extensi.enabled' },
+    { id: 'fetch', label: 'Fetch', icon: 'cloud-download', description: 'Fetch the main content from a web page', module: toolFetch, setting: 'codie.tools.fetch.enabled' },
+    { id: 'findTestFiles', label: 'Find Test Files', icon: 'beaker', description: 'Find test files for a given source or test file', module: toolFindTestFiles, setting: 'codie.tools.findTestFiles.enabled' },
+    { id: 'githubRepo', label: 'GitHub Repo', icon: 'github', description: 'Search a GitHub repository for code snippets', module: toolGithubRepo, setting: 'codie.tools.githubRepo.enabled' },
+    { id: 'new', label: 'New', icon: 'new-file', description: 'Scaffold a new workspace with VS Code configs', module: toolNew, setting: 'codie.tools.new.enabled' },
+    { id: 'openSimpleBrowser', label: 'Open Simple Browser', icon: 'browser', description: 'Preview a locally hosted website', module: toolOpenSimpleBrowser, setting: 'codie.tools.openSimpleBrowser.enabled' },
+    { id: 'problems', label: 'Problems', icon: 'error', description: 'Check errors for a particular file', module: toolProblems, setting: 'codie.tools.problems.enabled' },
+    { id: 'runCommands', label: 'Run Commands', icon: 'terminal', description: 'Run commands in the terminal', module: toolRunCommands, setting: 'codie.tools.runCommands.enabled' },
+    { id: 'runNotebooks', label: 'Run Notebooks', icon: 'book', description: 'Run notebook cells', module: toolRunNotebooks, setting: 'codie.tools.runNotebooks.enabled' },
+    { id: 'runTasks', label: 'Run Tasks', icon: 'tasklist', description: 'Run tasks and get their output', module: toolRunTasks, setting: 'codie.tools.runTasks.enabled' },
+    { id: 'runTests', label: 'Run Tests', icon: 'beaker', description: 'Run unit tests', module: toolRunTests, setting: 'codie.tools.runTests.enabled' },
+    { id: 'search', label: 'Search', icon: 'search', description: 'Search and read files in your workspace', module: toolSearch, setting: 'codie.tools.search.enabled' },
+    { id: 'searchResults', label: 'Search Results', icon: 'search', description: 'Get results from the search view', module: toolSearchResults, setting: 'codie.tools.searchResults.enabled' },
+    { id: 'terminalLastCommand', label: 'Terminal Last Command', icon: 'terminal', description: 'Get the last command run in the terminal', module: toolTerminalLastCommand, setting: 'codie.tools.terminalLastCommand.enabled' },
+    { id: 'terminalSelection', label: 'Terminal Selection', icon: 'terminal', description: 'Get the current selection in the terminal', module: toolTerminalSelection, setting: 'codie.tools.terminalSelection.enabled' },
+    { id: 'testFailure', label: 'Test Failure', icon: 'error', description: 'Get info about the last unit test failure', module: toolTestFailure, setting: 'codie.tools.testFailure.enabled' },
+    { id: 'think', label: 'Think', icon: 'lightbulb', description: 'Deep thinking and task organization', module: toolThink, setting: 'codie.tools.think.enabled' },
+    { id: 'todos', label: 'Todos', icon: 'checklist', description: 'Manage and track todo items', module: toolTodos, setting: 'codie.tools.todos.enabled' },
+    { id: 'usages', label: 'Usages', icon: 'symbol-reference', description: 'Find symbol usages', module: toolUsages, setting: 'codie.tools.usages.enabled' },
+    { id: 'vscodeAPI', label: 'VS Code API', icon: 'symbol-method', description: 'VS Code API reference and documentation', module: toolVscodeAPI, setting: 'codie.tools.vscodeAPI.enabled' },
   ];
 
   for (const tool of toolConfigs) {
@@ -444,7 +485,8 @@ export function activate(context: vscode.ExtensionContext) {
       label: tool.label,
       description: tool.description,
       enabled,
-  execute: (tool.module as any)[tool.id] || (async () => { throw new Error('Not implemented'); })
+      icon: tool.icon,
+      execute: (tool.module as any)[tool.id] || (async () => { throw new Error('Not implemented'); })
     });
   }
 
@@ -452,18 +494,24 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('codie.tools.manage', async () => {
       const allTools = ToolRegistry.list();
-      const picks = await vscode.window.showQuickPick(
-        allTools.map(t => ({
-          label: t.label,
+      // Group all native tools under a collapsible group
+      const quickPickItems: (vscode.QuickPickItem & { id?: string })[] = [];
+      quickPickItems.push({
+        label: 'Native-Tools',
+        kind: vscode.QuickPickItemKind.Separator
+      });
+      for (const t of allTools) {
+        quickPickItems.push({
+          label: `${t.icon ? `$(${t.icon}) ` : ''}${t.label}`,
           description: t.description,
           picked: t.enabled,
           id: t.id
-        })),
-        {
-          canPickMany: true,
-          placeHolder: 'Enable or disable tools'
-        }
-      );
+        });
+      }
+      const picks = await vscode.window.showQuickPick(quickPickItems, {
+        canPickMany: true,
+        placeHolder: 'Enable or disable tools'
+      });
       if (picks) {
         for (const tool of allTools) {
           const shouldEnable = picks.some(p => p.id === tool.id);

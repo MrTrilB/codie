@@ -30,34 +30,24 @@ function showContextDropdown() {
   dropdown.style.display = 'block';
   // Request file/folder list from extension
 }
-document.addEventListener('DOMContentLoaded', function() {
-  if (!window.vscode) {
-    // VS Code webview API is injected after DOMContentLoaded in some cases
-    if (typeof acquireVsCodeApi === 'function') {
-      window.vscode = acquireVsCodeApi();
-      console.log('[Codie] window.vscode initialized via acquireVsCodeApi');
-    } else {
-      console.warn('[Codie] window.vscode is not defined and acquireVsCodeApi is not available!');
-    }
+function ensureVsCodeApi() {
+  if (!window.vscode && typeof acquireVsCodeApi === 'function') {
+    window.vscode = acquireVsCodeApi();
+    console.log('[Codie] window.vscode initialized via acquireVsCodeApi');
+  } else if (!window.vscode) {
+    console.warn('[Codie] window.vscode is not defined and acquireVsCodeApi is not available!');
   }
+}
+
+ensureVsCodeApi();
+document.addEventListener('DOMContentLoaded', function() {
+  ensureVsCodeApi();
 
   document.getElementById('codie-tools-btn')?.addEventListener('click', function() {
     // ...existing code...
   });
 
-  document.addEventListener('click', function(e) {
-    const target = e.target.closest('#codie-add-context-btn');
-    if (target) {
-      e.preventDefault();
-      console.log('[Codie] Add Context button clicked');
-      if (window.vscode) {
-        console.log('[Codie] Posting openAddContextPicker to extension');
-        window.vscode.postMessage({ command: 'openAddContextPicker' });
-      } else {
-        console.warn('[Codie] window.vscode is not defined at button click!');
-      }
-    }
-  });
+  // (React handles Add Context button click now)
 });
 
 // Maintain attached context state
@@ -68,21 +58,7 @@ window.addEventListener('message', function(event) {
   var msg = event.data;
   // Debug: log all messages
   console.log('[Codie] Webview received message:', msg);
-  // Handle selectedModel
-  if (msg && msg.command === 'selectedModel') {
-    var el = document.getElementById('codie-selected-model');
-    if (el) {
-      var text = '';
-      if (msg.model && msg.provider) {
-        text = 'Selected: ' + msg.model + ' | ' + msg.provider;
-      } else if (msg.provider) {
-        text = 'Selected: ' + msg.provider;
-      } else {
-        text = 'No AI selected';
-      }
-      el.textContent = text;
-    }
-  }
+  // (selectedModel is now handled by React, not here)
 
   // Handle addContext: update attached items UI (files)
   if (msg && msg.command === 'addContext') {

@@ -5,6 +5,7 @@ import { LMStudioClient } from '@lmstudio/sdk';
 
 
 export class LMStudioProvider implements AIProvider {
+  public readonly key = 'lmstudio';
   private activeModel: any = null;
   private activeModelId: string | null = null;
   private client: LMStudioClient;

@@ -3,6 +3,7 @@ import ollama, { Ollama } from 'ollama';
 
 
 export class OllamaProvider implements AIProvider {
+  public readonly key = 'ollama';
   private client: Ollama;
   private host: string;
   private activeModelId: string | null = null;

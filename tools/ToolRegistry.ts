@@ -4,6 +4,7 @@ export interface Tool {
   label: string;
   description?: string;
   enabled: boolean;
+  icon?: string;
   execute(...args: any[]): Promise<any>;
 }
 

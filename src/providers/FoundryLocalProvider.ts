@@ -4,6 +4,7 @@ import { OpenAI } from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export class FoundryLocalProvider implements AIProvider {
+  public readonly key = 'foundry';
   private foundryManager: FoundryLocalManager;
   private openai: OpenAI | undefined;
   private endpoint: string | undefined;

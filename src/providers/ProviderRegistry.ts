@@ -16,6 +16,7 @@ export class ProviderRegistry {
     const results: { provider: AIProvider; models: AIModelInfo[] }[] = [];
     for (const provider of this.providers) {
       try {
+        console.log('[Codie] ProviderRegistry: calling listModels for', provider.getName());
         const models = await provider.listModels();
         console.log(`[Codie] ProviderRegistry: ${provider.getName()} returned models:`, models);
         results.push({ provider, models });
