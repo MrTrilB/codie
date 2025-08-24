@@ -33,6 +33,18 @@
             "description": "Override the Foundry Local service URL (e.g. http://localhost:60244). If set, this will be used for all Foundry Local operations.",
             "scope": "window"
           },
+          "codie.providers.foundry.maxTokens": {
+            "type": "number",
+            "default": 1024,
+            "description": "Maximum number of tokens for Foundry Local AI responses.",
+            "scope": "window"
+          },
+          "codie.providers.ollama.maxTokens": {
+            "type": "number",
+            "default": 1024,
+            "description": "Maximum number of tokens for Ollama AI responses.",
+            "scope": "window"
+          },
           "codie.providers.ollama.enabled": {
             "type": "boolean",
             "default": true,
@@ -43,6 +55,12 @@
             "type": "string",
             "default": "http://localhost:11434/v1",
             "description": "Ollama API endpoint URI (default: http://localhost:11434/v1)",
+            "scope": "window"
+          },
+          "codie.providers.lmstudio.maxTokens": {
+            "type": "number",
+            "default": 1024,
+            "description": "Maximum number of tokens for LM Studio AI responses.",
             "scope": "window"
           },
           "codie.providers.lmstudio.enabled": {
@@ -277,12 +295,16 @@
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@types/sinon": "^17.0.4",
     "@types/vscode": "^1.103.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "2.3.0",
     "eslint": "^9.32.0",
     "mocha": "10.2.0",
+    "sinon": "^21.0.0",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
@@ -301,6 +323,9 @@
     "@vscode/codicons": "^0.0.39",
     "foundry-local-sdk": "^0.3.1",
     "ollama": "^0.5.17",
-    "openai": "^5.12.2"
+    "openai": "^5.12.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^8.0.7"
   }
 }

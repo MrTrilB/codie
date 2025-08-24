@@ -1,95 +1,6 @@
-import { ToolRegistry, Tool } from '../tools/ToolRegistry';
-import * as toolChanges from '../tools/changes';
-import * as toolCodebase from '../tools/codebase';
-import * as toolEditFiles from '../tools/editFiles';
-import * as toolExtensi from '../tools/extensi';
-import * as toolFetch from '../tools/fetch';
-import * as toolFindTestFiles from '../tools/findTestFiles';
-import * as toolGithubRepo from '../tools/githubRepo';
-import * as toolNew from '../tools/new';
-import * as toolOpenSimpleBrowser from '../tools/openSimpleBrowser';
-import * as toolProblems from '../tools/problems';
-import * as toolRunCommands from '../tools/runCommands';
-import * as toolRunNotebooks from '../tools/runNotebooks';
-import * as toolRunTasks from '../tools/runTasks';
-import * as toolRunTests from '../tools/runTests';
-import * as toolSearch from '../tools/search';
-import * as toolSearchResults from '../tools/searchResults';
-import * as toolTerminalLastCommand from '../tools/terminalLastCommand';
-import * as toolTerminalSelection from '../tools/terminalSelection';
-import * as toolTestFailure from '../tools/testFailure';
-import * as toolThink from '../tools/think';
-import * as toolTodos from '../tools/todos';
-import * as toolUsages from '../tools/usages';
-import * as toolVscodeAPI from '../tools/vscodeAPI';
-
-import { ProviderRegistry } from './providers/ProviderRegistry';
-import { FoundryLocalProvider } from './providers/FoundryLocalProvider';
-import { LMStudioProvider } from './providers/LMStudioProvider';
-import { OllamaProvider } from './providers/OllamaProvider';
-import * as vscode from 'vscode';
-
-// Tree item types
-type CodieTreeItemType = 'root' | 'providers' | 'provider' | 'foundry-static-port';
-
-class CodieTreeItem extends vscode.TreeItem {
-  constructor(
-    public readonly label: string,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly type: CodieTreeItemType,
-    public readonly providerKey?: string
-  ) {
-    super(label, collapsibleState);
-    this.contextValue = type;
-    if (type === 'foundry-static-port') {
-      this.command = {
-        command: 'codie.treeView.itemClick',
-        title: 'Create Static Port',
-        arguments: [this]
-      };
-    }
-  }
-}
-
-class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<CodieTreeItem | undefined | void> = new vscode.EventEmitter<CodieTreeItem | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<CodieTreeItem | undefined | void> = this._onDidChangeTreeData.event;
-
-  getTreeItem(element: CodieTreeItem): vscode.TreeItem {
-    return element;
-  }
-
-  getChildren(element?: CodieTreeItem): Thenable<CodieTreeItem[]> {
-    if (!element) {
-      // Root: show Providers parent
-      return Promise.resolve([
-        new CodieTreeItem('Providers', vscode.TreeItemCollapsibleState.Expanded, 'providers')
-      ]);
-    }
-    if (element.type === 'providers') {
-      // Children: each provider
-      return Promise.resolve([
-        new CodieTreeItem('FoundryLocal', vscode.TreeItemCollapsibleState.Collapsed, 'provider', 'foundry'),
-        new CodieTreeItem('LM Studio', vscode.TreeItemCollapsibleState.None, 'provider', 'lmstudio'),
-        new CodieTreeItem('Ollama', vscode.TreeItemCollapsibleState.None, 'provider', 'ollama'),
-      ]);
-    }
-    if (element.type === 'provider' && element.providerKey === 'foundry') {
-      // Foundry children: static port option
-      return Promise.resolve([
-        new CodieTreeItem('Create Static Port', vscode.TreeItemCollapsibleState.None, 'foundry-static-port', 'foundry')
-      ]);
-    }
-    // No children for other providers
-    return Promise.resolve([]);
-  }
-}
-
-
 
 class CodieChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codie-chat-view';
-
   private _webviewView?: vscode.WebviewView;
   private providerRegistry: ProviderRegistry;
 
@@ -119,22 +30,96 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
     // Listen for messages from the webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
-  if (!msg || !msg.command) return;
-  switch (msg.command) {
-    case 'openToolSettings': {
-      // Open the VS Code QuickPick for managing tools
-      await vscode.commands.executeCommand('codie.tools.manage');
-      break;
-    }
-        case 'getModelsForProvider': {
-          // Get models for the requested provider
-          const providerKey = msg.provider;
-          console.log('[Codie] getModelsForProvider: requested key:', providerKey);
+      if (!msg || !msg.command) return;
+
+      // CONTINUE/CANCEL HANDLING
+      // Track last user/AI messages and abort controller at module scope
+      // (see top of file for variable declarations)
+      if (msg.command === 'createFile') {
+        // Create a file in the workspace using the editFiles tool
+        const { filePath, content } = msg;
+        if (!filePath || typeof content !== 'string') {
+          webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: 'Missing filePath or content.' });
+          return;
+        }
+        try {
+          // Use the editFiles tool for file creation
+          const result = await toolEditFiles.editFiles({ action: 'write', filePath, content });
+          if (result.success) {
+            webviewView.webview.postMessage({ command: 'fileCreateResult', success: true, filePath });
+          } else {
+            webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: result.error });
+          }
+        } catch (err: any) {
+          webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: err?.message || err });
+        }
+        return;
+      }
+      if (msg.command === 'continueAIResponse') {
+        if (!lastProviderName || !lastModelId || !lastUserMessage) {
+          webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'No previous context to continue.' });
+          return;
+        }
+        webviewView.webview.postMessage({ command: 'aiChatStarted' });
+        currentAbortController = new AbortController();
+        try {
+          // Manual provider lookup (by name or key)
           let provider = undefined;
           for (const p of this.providerRegistry.getProviders()) {
             const pKey = (p as any).key || '';
             const pName = p.getName();
-            console.log('[Codie] getModelsForProvider: checking provider', { key: pKey, name: pName });
+            if (
+              pKey === lastProviderName ||
+              pName === lastProviderName ||
+              (typeof pName === 'string' && typeof lastProviderName === 'string' &&
+                (pName as string).toLowerCase() === (lastProviderName as string).toLowerCase())
+            ) {
+              provider = p;
+              break;
+            }
+          }
+          if (!provider) throw new Error(`Provider '${lastProviderName}' not found.`);
+          // Always inject Codie persona system prompt
+          const systemPrompt = 'You are Codie, a helpful AI assistant for VS Code users. Always refer to yourself as Codie.';
+          let continuePrompt = `${systemPrompt}\n${lastUserMessage}\n${lastAIResponse || ''}\nContinue:`;
+          const aiResponse = await provider.sendMessage(lastModelId, continuePrompt);
+          lastAIResponse = aiResponse;
+          webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse });
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            webviewView.webview.postMessage({ command: 'aiChatCancelled' });
+          } else {
+            webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'Error continuing: ' + (err.message || err) });
+          }
+        } finally {
+          currentAbortController = undefined;
+        }
+        return;
+      }
+      if (msg.command === 'cancelAIResponse') {
+        if (currentAbortController) {
+          currentAbortController.abort();
+          currentAbortController = undefined;
+          webviewView.webview.postMessage({ command: 'aiChatCancelled' });
+        } else {
+          webviewView.webview.postMessage({ command: 'aiChatCancelled' });
+        }
+        return;
+      }
+
+      switch (msg.command) {
+        case 'openToolSettings': {
+          // Open the VS Code QuickPick for managing tools
+          await vscode.commands.executeCommand('codie.tools.manage');
+          break;
+        }
+        case 'getModelsForProvider': {
+          // Get models for the requested provider
+          const providerKey = msg.provider;
+          let provider = undefined;
+          for (const p of this.providerRegistry.getProviders()) {
+            const pKey = (p as any).key || '';
+            const pName = p.getName();
             if (
               pKey === providerKey ||
               pName === providerKey ||
@@ -145,18 +130,15 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             }
           }
           if (!provider) {
-            console.warn('[Codie] getModelsForProvider: No provider found for key', providerKey);
             webviewView.webview.postMessage({ command: 'modelList', models: [] });
             return;
           }
           try {
             const models = await provider.listModels();
-            console.log('[Codie] getModelsForProvider: models returned:', models);
             // Send as array of { key, label }
             const modelList = (models || []).map((m: any) => ({ key: m.id, label: m.name }));
             webviewView.webview.postMessage({ command: 'modelList', models: modelList });
           } catch (err) {
-            console.error('[Codie] getModelsForProvider: error calling listModels:', err);
             webviewView.webview.postMessage({ command: 'modelList', models: [] });
           }
           break;
@@ -277,26 +259,30 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
         }
         case 'userChatMessage': {
           // Debug: log message receipt
-          console.log('[Codie] Received userChatMessage from webview:', msg);
           const userText = msg.text || '';
           // Get selected provider/model from workspaceState
           const providerName = this.context.workspaceState.get('codie.selectedProvider', '');
           const modelId = this.context.workspaceState.get('codie.selectedModelId', '');
-          console.log('[Codie] Selected provider/model:', providerName, modelId);
           if (!providerName || !modelId) {
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'No AI provider/model selected.' });
             return;
           }
-          // Find the provider instance
+          // Find the provider instance (by key or name)
           let provider = undefined;
           for (const p of this.providerRegistry.getProviders()) {
-            if (p.getName() === providerName) {
+            const pKey = (p as any).key || '';
+            const pName = p.getName();
+            if (
+              pKey === providerName ||
+              pName === providerName ||
+              (typeof pName === 'string' && typeof providerName === 'string' &&
+                (pName as string).toLowerCase() === (providerName as string).toLowerCase())
+            ) {
               provider = p;
               break;
             }
           }
           if (!provider) {
-            console.error('[Codie] Provider not found:', providerName);
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: `Provider '${providerName}' not found.` });
             return;
           }
@@ -305,12 +291,18 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
           // Call sendMessage and send response
           try {
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'Thinking...' });
-            console.log('[Codie] Calling provider.sendMessage...');
-            const aiResponse = await provider.sendMessage(modelId, userText, systemPrompt);
-            console.log('[Codie] AI response:', aiResponse);
+            // Set CONTINUE/CANCEL state for this chat
+            lastProviderName = providerName;
+            lastModelId = modelId;
+            lastUserMessage = userText;
+            lastAIResponse = undefined;
+            currentAbortController = undefined;
+            // Always inject Codie persona system prompt
+            const promptWithPersona = `${systemPrompt}\n${userText}`;
+            const aiResponse = await provider.sendMessage(modelId, promptWithPersona);
+            lastAIResponse = aiResponse;
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse || '(No response)' });
           } catch (err: any) {
-            console.error('[Codie] Error in provider.sendMessage:', err);
             let userMsg = `Error: ${err?.message || err}`;
             const errStr = (err?.message || err || '').toString();
             if (/404|not found|connection refused|ECONNREFUSED/i.test(errStr)) {
@@ -340,7 +332,6 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     const reactBundleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chat.css'));
     const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.css'));
-    const codiconFontUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.ttf'));
     const codieLogoUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'Codie.png'));
     return `
       <!DOCTYPE html>
@@ -362,6 +353,103 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     `;
   }
 }
+import { ToolRegistry, Tool } from '../tools/ToolRegistry';
+import * as toolChanges from '../tools/changes';
+import * as toolCodebase from '../tools/codebase';
+import * as toolEditFiles from '../tools/editFiles';
+import * as toolExtensi from '../tools/extensi';
+import * as toolFetch from '../tools/fetch';
+import * as toolFindTestFiles from '../tools/findTestFiles';
+import * as toolGithubRepo from '../tools/githubRepo';
+import * as toolNew from '../tools/new';
+import * as toolOpenSimpleBrowser from '../tools/openSimpleBrowser';
+import * as toolProblems from '../tools/problems';
+import * as toolRunCommands from '../tools/runCommands';
+import * as toolRunNotebooks from '../tools/runNotebooks';
+import * as toolRunTasks from '../tools/runTasks';
+import * as toolRunTests from '../tools/runTests';
+import * as toolSearch from '../tools/search';
+import * as toolSearchResults from '../tools/searchResults';
+import * as toolTerminalLastCommand from '../tools/terminalLastCommand';
+import * as toolTerminalSelection from '../tools/terminalSelection';
+import * as toolTestFailure from '../tools/testFailure';
+import * as toolThink from '../tools/think';
+import * as toolTodos from '../tools/todos';
+import * as toolUsages from '../tools/usages';
+import * as toolVscodeAPI from '../tools/vscodeAPI';
+
+import { ProviderRegistry } from './providers/ProviderRegistry';
+import { FoundryLocalProvider } from './providers/FoundryLocalProvider';
+import { LMStudioProvider } from './providers/LMStudioProvider';
+
+import { OllamaProvider } from './providers/OllamaProvider';
+import * as vscode from 'vscode';
+
+// CONTINUE/CANCEL STATE (module scope for CodieChatViewProvider)
+let lastProviderName: string | undefined = undefined;
+let lastModelId: string | undefined = undefined;
+let lastUserMessage: string | undefined = undefined;
+let lastAIResponse: string | undefined = undefined;
+let currentAbortController: AbortController | undefined = undefined;
+
+// Tree item types
+type CodieTreeItemType = 'root' | 'providers' | 'provider' | 'foundry-static-port';
+
+class CodieTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly label: string,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly type: CodieTreeItemType,
+    public readonly providerKey?: string
+  ) {
+    super(label, collapsibleState);
+    this.contextValue = type;
+    if (type === 'foundry-static-port') {
+      this.command = {
+        command: 'codie.treeView.itemClick',
+        title: 'Create Static Port',
+        arguments: [this]
+      };
+    }
+  }
+}
+
+class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
+  private _onDidChangeTreeData: vscode.EventEmitter<CodieTreeItem | undefined | void> = new vscode.EventEmitter<CodieTreeItem | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<CodieTreeItem | undefined | void> = this._onDidChangeTreeData.event;
+
+  getTreeItem(element: CodieTreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(element?: CodieTreeItem): Thenable<CodieTreeItem[]> {
+    if (!element) {
+      // Root: show Providers parent
+      return Promise.resolve([
+        new CodieTreeItem('Providers', vscode.TreeItemCollapsibleState.Expanded, 'providers')
+      ]);
+    }
+    if (element.type === 'providers') {
+      // Children: each provider
+      return Promise.resolve([
+        new CodieTreeItem('FoundryLocal', vscode.TreeItemCollapsibleState.Collapsed, 'provider', 'foundry'),
+        new CodieTreeItem('LM Studio', vscode.TreeItemCollapsibleState.None, 'provider', 'lmstudio'),
+        new CodieTreeItem('Ollama', vscode.TreeItemCollapsibleState.None, 'provider', 'ollama'),
+      ]);
+    }
+    if (element.type === 'provider' && element.providerKey === 'foundry') {
+      // Foundry children: static port option
+      return Promise.resolve([
+        new CodieTreeItem('Create Static Port', vscode.TreeItemCollapsibleState.None, 'foundry-static-port', 'foundry')
+      ]);
+    }
+    // No children for other providers
+    return Promise.resolve([]);
+  }
+}
+
+
+
 
 // Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext) {

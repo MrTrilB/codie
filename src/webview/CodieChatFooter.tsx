@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 interface CodieChatFooterProps {
   onSendUserMessage?: (text: string) => void;
@@ -25,11 +26,18 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
   const [chatInput, setChatInput] = useState('');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // State for error message
+  const [sendError, setSendError] = useState<string | null>(null);
   // Handler for sending a message
   const handleSend = (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
     const text = chatInput.trim();
     if (!text) return;
+    if (!selectedProvider.key || !selectedModel.key) {
+      setSendError('Please select an AI provider and model before sending.');
+      return;
+    }
+    setSendError(null);
     if (window.vscode) {
       window.vscode.postMessage({ command: 'userChatMessage', text });
     }
@@ -266,6 +274,9 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
           onKeyDown={handleKeyDown}
           ref={chatInputRef}
         ></textarea>
+        {sendError && (
+          <div style={{ color: '#ff6161', fontSize: '0.95em', marginTop: '0.2em', marginLeft: '0.2em' }}>{sendError}</div>
+        )}
               <div className="codie-input-row codie-input-row-bottom codie-footer-row-relative">
                 <a
                   href="#"

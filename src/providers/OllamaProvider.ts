@@ -1,6 +1,8 @@
 import { AIProvider, AIModelInfo } from './AIProvider';
 import ollama, { Ollama } from 'ollama';
 
+import * as vscode from 'vscode';
+
 
 export class OllamaProvider implements AIProvider {
   public readonly key = 'ollama';
@@ -65,21 +67,45 @@ export class OllamaProvider implements AIProvider {
   }
 
 
-  async sendMessage(modelId: string, message: string, systemPrompt?: string): Promise<string> {
+  async sendMessage(
+    modelId: string,
+    message: string,
+    systemPrompt?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<string> {
+    let aborted = false;
+    const abortHandler = () => { aborted = true; };
     try {
+      if (options?.signal) {
+        if (options.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+        options.signal.addEventListener('abort', abortHandler);
+      }
       const messages = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
       messages.push({ role: 'user', content: message });
-      const response = await this.client.chat({
+      // Read maxTokens from VS Code config
+      const config = vscode.workspace.getConfiguration();
+      const maxTokens = config.get<number>('codie.providers.ollama.maxTokens', 1024);
+      // Add num_predict to the options of the user message (last message)
+      const messagesWithOptions = messages.map((msg, idx) =>
+        idx === messages.length - 1 ? { ...msg, options: { num_predict: maxTokens } } : msg
+      );
+      const responsePromise = this.client.chat({
         model: modelId,
-        messages,
+        messages: messagesWithOptions,
         keep_alive: this.keepAlive,
       });
-      return response.message?.content || '';
+      const response = await (options?.signal ? Promise.race([
+        responsePromise,
+        new Promise((_, reject) => options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))))
+      ]) : responsePromise);
+      if (aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+      return (response as any).message?.content || '';
     } catch (err: any) {
       let msg = '[OllamaProvider] Error sending message:';
+      if (err?.name === 'AbortError') throw err;
       if (err?.response?.status === 404) {
         msg += ' 404 Not Found. Is Ollama running at ' + this.host + '?';
       } else if (err?.code === 'ECONNREFUSED' || err?.message?.includes('ECONNREFUSED')) {
@@ -89,6 +115,8 @@ export class OllamaProvider implements AIProvider {
       }
       console.error(msg);
       throw new Error(msg);
+    } finally {
+      if (options?.signal) options.signal.removeEventListener('abort', abortHandler);
     }
   }
 }

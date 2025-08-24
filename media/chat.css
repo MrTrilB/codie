@@ -275,6 +275,57 @@ position: absolute;
 
 /* Ensure AI/bot messages stay left and visually distinct */
 .codie-chat-message.bot {
+}
+
+/* Markdown styling for AI output */
+.codie-chat-message.bot h1,
+.codie-chat-message.bot h2,
+.codie-chat-message.bot h3,
+.codie-chat-message.bot h4,
+.codie-chat-message.bot h5,
+.codie-chat-message.bot h6 {
+	color: #aad6ff;
+	margin: 0.5em 0 0.3em 0;
+	font-weight: 700;
+}
+.codie-chat-message.bot p {
+	margin: 0.3em 0;
+}
+.codie-chat-message.bot code {
+	background: #23272e;
+	color: #ffb86c;
+	font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+	font-size: 0.98em;
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+}
+.codie-chat-message.bot pre {
+	background: #181c20;
+	color: #ffb86c;
+	font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+	font-size: 0.98em;
+	padding: 0.7em 1em;
+	border-radius: 6px;
+	margin: 0.5em 0;
+	overflow-x: auto;
+}
+.codie-chat-message.bot blockquote {
+	border-left: 3px solid #4F8EF7;
+	background: #23272e;
+	color: #b0b0b0;
+	margin: 0.5em 0;
+	padding: 0.4em 1em;
+	border-radius: 4px;
+	font-style: italic;
+}
+.codie-chat-message.bot ul,
+.codie-chat-message.bot ol {
+	margin: 0.4em 0 0.4em 1.2em;
+	padding-left: 1.2em;
+}
+.codie-chat-message.bot li {
+	margin: 0.2em 0;
+}
 	background: var(--vscode-sideBar-background, #23272e);
 	color: #fff;
 	border-radius: 4px 16px 16px 16px;

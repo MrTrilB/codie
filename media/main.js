@@ -164,6 +164,7 @@ function formatTime(date) {
 }
 
 function renderMessages() {
+  if (!chatMessages) return;
   chatMessages.innerHTML = '';
   function escapeHtml(str) {
     return str.replace(/[&<>"']/g, function(tag) {

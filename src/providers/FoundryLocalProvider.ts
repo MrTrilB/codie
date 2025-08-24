@@ -1,7 +1,9 @@
-import { AIProvider, AIModelInfo } from './AIProvider';
 import { FoundryLocalManager } from 'foundry-local-sdk';
 import { OpenAI } from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+import { AIProvider, AIModelInfo } from './AIProvider';
+import * as vscode from 'vscode';
 
 export class FoundryLocalProvider implements AIProvider {
   public readonly key = 'foundry';
@@ -113,7 +115,12 @@ export class FoundryLocalProvider implements AIProvider {
     }
   }
 
-  async sendMessage(modelId: string, message: string, systemPrompt?: string): Promise<string> {
+  async sendMessage(
+    modelId: string,
+    message: string,
+    systemPrompt?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<string> {
     try {
       // Ensure endpoint/apiKey are set
       if (!this.endpoint || !this.apiKey) {
@@ -125,6 +132,9 @@ export class FoundryLocalProvider implements AIProvider {
       if (!this.openai) {
         this.openai = new OpenAI({ baseURL: this.endpoint, apiKey: this.apiKey });
       }
+      // Read maxTokens from VS Code config
+      const config = vscode.workspace.getConfiguration();
+      const maxTokens = config.get<number>('codie.providers.foundry.maxTokens', 1024);
       const messages: ChatCompletionMessageParam[] = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
@@ -134,6 +144,9 @@ export class FoundryLocalProvider implements AIProvider {
         model: modelId,
         messages,
         stream: false,
+        max_tokens: maxTokens,
+      }, {
+        signal: options?.signal
       });
       return completion.choices[0]?.message?.content || '';
     } catch (err: any) {

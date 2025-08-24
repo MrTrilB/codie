@@ -2,6 +2,8 @@
 import { AIProvider, AIModelInfo } from './AIProvider';
 import { LMStudioClient } from '@lmstudio/sdk';
 
+import * as vscode from 'vscode';
+
 
 
 export class LMStudioProvider implements AIProvider {
@@ -104,8 +106,19 @@ export class LMStudioProvider implements AIProvider {
   }
 
 
-  async sendMessage(modelId: string, message: string, systemPrompt?: string): Promise<string> {
+  async sendMessage(
+    modelId: string,
+    message: string,
+    systemPrompt?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<string> {
+    let aborted = false;
+    const abortHandler = () => { aborted = true; };
     try {
+      if (options?.signal) {
+        if (options.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+        options.signal.addEventListener('abort', abortHandler);
+      }
       let model = this.activeModel;
       if (!model || this.activeModelId !== modelId) {
         model = await this.client.llm.model(modelId);
@@ -116,10 +129,20 @@ export class LMStudioProvider implements AIProvider {
       if (systemPrompt) {
         prompt = `${systemPrompt}\n\n${message}`;
       }
-      const result = await model.respond(prompt);
-      return result.content || '';
+      // Read maxTokens from VS Code config
+      const config = vscode.workspace.getConfiguration();
+      const maxTokens = config.get<number>('codie.providers.lmstudio.maxTokens', 1024);
+      // If LM Studio SDK/model supports maxTokens, pass it as an option
+      const resultPromise = model.respond(prompt, { maxTokens });
+      const result = await (options?.signal ? Promise.race([
+        resultPromise,
+        new Promise((_, reject) => options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))))
+      ]) : resultPromise);
+      if (aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+      return (result as any).content || '';
     } catch (err: any) {
       let msg = 'LMStudioProvider: Error sending message:';
+      if (err?.name === 'AbortError') throw err;
       if (err?.response?.status === 404) {
         msg += ' 404 Not Found. Is LM Studio running at ' + this.endpoint + '?';
       } else if (err?.code === 'ECONNREFUSED' || err?.message?.includes('ECONNREFUSED')) {
@@ -129,6 +152,8 @@ export class LMStudioProvider implements AIProvider {
       }
       console.error(msg);
       throw new Error(msg);
+    } finally {
+      if (options?.signal) options.signal.removeEventListener('abort', abortHandler);
     }
   }
 }
