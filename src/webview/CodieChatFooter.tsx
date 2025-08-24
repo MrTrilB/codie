@@ -275,7 +275,7 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
           ref={chatInputRef}
         ></textarea>
         {sendError && (
-          <div style={{ color: '#ff6161', fontSize: '0.95em', marginTop: '0.2em', marginLeft: '0.2em' }}>{sendError}</div>
+          <div className="codie-send-error">{sendError}</div>
         )}
               <div className="codie-input-row codie-input-row-bottom codie-footer-row-relative">
                 <a

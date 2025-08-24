@@ -32,26 +32,34 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       if (!msg || !msg.command) return;
 
-      // CONTINUE/CANCEL HANDLING
-      // Track last user/AI messages and abort controller at module scope
-      // (see top of file for variable declarations)
-      if (msg.command === 'createFile') {
-        // Create a file in the workspace using the editFiles tool
-        const { filePath, content } = msg;
-        if (!filePath || typeof content !== 'string') {
-          webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: 'Missing filePath or content.' });
+      // --- TOOL INTEGRATION ---
+      if (msg.command === 'getToolList') {
+        // Send list of tools (id, label, inputSchema, enabled, destructive)
+        const tools = ToolRegistry.list().map(t => ({
+          id: t.id,
+          label: t.label,
+          description: t.description,
+          enabled: t.enabled,
+          inputSchema: t.inputSchema || {},
+          destructive: typeof (t as any).destructive === 'boolean' ? (t as any).destructive : false
+        }));
+        webviewView.webview.postMessage({ command: 'toolList', tools });
+        return;
+      }
+      if (msg.command === 'invokeTool') {
+        const { toolId, input, sessionId, requestId } = msg;
+        console.log('[Codie] invokeTool received:', { toolId, input, sessionId, requestId });
+        if (!toolId) {
+          webviewView.webview.postMessage({ command: 'toolResult', toolId, error: 'Missing toolId', sessionId, requestId });
           return;
         }
         try {
-          // Use the editFiles tool for file creation
-          const result = await toolEditFiles.editFiles({ action: 'write', filePath, content });
-          if (result.success) {
-            webviewView.webview.postMessage({ command: 'fileCreateResult', success: true, filePath });
-          } else {
-            webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: result.error });
-          }
+          const result = await ToolRegistry.execute(toolId, input || {}, { sessionId, requestId });
+          console.log('[Codie] invokeTool result:', { toolId, result });
+          webviewView.webview.postMessage({ command: 'toolResult', toolId, result, sessionId, requestId });
         } catch (err: any) {
-          webviewView.webview.postMessage({ command: 'fileCreateResult', success: false, error: err?.message || err });
+          console.error('[Codie] invokeTool error:', err);
+          webviewView.webview.postMessage({ command: 'toolResult', toolId, error: err?.message || err, sessionId, requestId });
         }
         return;
       }
@@ -286,8 +294,25 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: `Provider '${providerName}' not found.` });
             return;
           }
-          // Persona system prompt for Codie
-          const systemPrompt = 'You are Codie, a helpful AI assistant for VS Code users. Always refer to yourself as Codie.';
+          // Persona system prompt for Codie, with general instructions and tool schema prepended
+          const enabledTools = ToolRegistry.list().filter(t => t.enabled);
+          const toolSchemaDesc = enabledTools.map(tool => {
+            let schema = '';
+            if (tool.inputSchema && typeof tool.inputSchema === 'object' && Object.keys(tool.inputSchema).length > 0) {
+              schema = Object.keys(tool.inputSchema).map(k => {
+                const field = tool.inputSchema ? tool.inputSchema[k] : {};
+                let type = 'string';
+                if (field && typeof field === 'object' && typeof field.type === 'string') {
+                  type = field.type;
+                }
+                return `  - ${k}: ${type}`;
+              }).join('\n');
+            }
+            return `Tool: ${tool.label || tool.id}\nDescription: ${tool.description || ''}\nInputs:\n${schema}`;
+          }).join('\n\n');
+          // Load general instructions from schema file
+          const general = (generalInstructions && Array.isArray(generalInstructions)) ? generalInstructions.join('\n') : '';
+          const systemPrompt = `${general}\n\nAvailable tools you can use (invoke by name and provide required inputs):\n${toolSchemaDesc}\n\nIMPORTANT: If the user requests to create, edit, append, read, or delete a file, ALWAYS use the Edit Files tool instead of giving manual instructions. Respond ONLY with the tool call and required parameters. Do NOT give step-by-step instructions for file operations.`;
           // Call sendMessage and send response
           try {
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'Thinking...' });
@@ -297,7 +322,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             lastUserMessage = userText;
             lastAIResponse = undefined;
             currentAbortController = undefined;
-            // Always inject Codie persona system prompt
+            // Always inject Codie persona system prompt with tool schema
             const promptWithPersona = `${systemPrompt}\n${userText}`;
             const aiResponse = await provider.sendMessage(modelId, promptWithPersona);
             lastAIResponse = aiResponse;
@@ -353,30 +378,10 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     `;
   }
 }
+
 import { ToolRegistry, Tool } from '../tools/ToolRegistry';
-import * as toolChanges from '../tools/changes';
-import * as toolCodebase from '../tools/codebase';
-import * as toolEditFiles from '../tools/editFiles';
-import * as toolExtensi from '../tools/extensi';
-import * as toolFetch from '../tools/fetch';
-import * as toolFindTestFiles from '../tools/findTestFiles';
-import * as toolGithubRepo from '../tools/githubRepo';
-import * as toolNew from '../tools/new';
-import * as toolOpenSimpleBrowser from '../tools/openSimpleBrowser';
-import * as toolProblems from '../tools/problems';
-import * as toolRunCommands from '../tools/runCommands';
-import * as toolRunNotebooks from '../tools/runNotebooks';
-import * as toolRunTasks from '../tools/runTasks';
-import * as toolRunTests from '../tools/runTests';
-import * as toolSearch from '../tools/search';
-import * as toolSearchResults from '../tools/searchResults';
-import * as toolTerminalLastCommand from '../tools/terminalLastCommand';
-import * as toolTerminalSelection from '../tools/terminalSelection';
-import * as toolTestFailure from '../tools/testFailure';
-import * as toolThink from '../tools/think';
-import * as toolTodos from '../tools/todos';
-import * as toolUsages from '../tools/usages';
-import * as toolVscodeAPI from '../tools/vscodeAPI';
+import { toolSchemas } from '../schema/toolSchemas';
+import { generalInstructions } from '../schema/generalSchema';
 
 import { ProviderRegistry } from './providers/ProviderRegistry';
 import { FoundryLocalProvider } from './providers/FoundryLocalProvider';
@@ -541,41 +546,31 @@ export function activate(context: vscode.ExtensionContext) {
   );
   // Tool configuration and registration
   const config = vscode.workspace.getConfiguration();
-  const toolConfigs = [
-    { id: 'changes', label: 'Changes', icon: 'diff', description: 'Get diffs of changed files', module: toolChanges, setting: 'codie.tools.changes.enabled' },
-    { id: 'codebase', label: 'Codebase', icon: 'repo', description: 'Find relevant file chunks, symbols, and codebase info', module: toolCodebase, setting: 'codie.tools.codebase.enabled' },
-    { id: 'editFiles', label: 'Edit Files', icon: 'edit', description: 'Edit files in your workspace', module: toolEditFiles, setting: 'codie.tools.editFiles.enabled' },
-    { id: 'extensi', label: 'Extensi', icon: 'extensions', description: 'VS Code Extensions Marketplace integration', module: toolExtensi, setting: 'codie.tools.extensi.enabled' },
-    { id: 'fetch', label: 'Fetch', icon: 'cloud-download', description: 'Fetch the main content from a web page', module: toolFetch, setting: 'codie.tools.fetch.enabled' },
-    { id: 'findTestFiles', label: 'Find Test Files', icon: 'beaker', description: 'Find test files for a given source or test file', module: toolFindTestFiles, setting: 'codie.tools.findTestFiles.enabled' },
-    { id: 'githubRepo', label: 'GitHub Repo', icon: 'github', description: 'Search a GitHub repository for code snippets', module: toolGithubRepo, setting: 'codie.tools.githubRepo.enabled' },
-    { id: 'new', label: 'New', icon: 'new-file', description: 'Scaffold a new workspace with VS Code configs', module: toolNew, setting: 'codie.tools.new.enabled' },
-    { id: 'openSimpleBrowser', label: 'Open Simple Browser', icon: 'browser', description: 'Preview a locally hosted website', module: toolOpenSimpleBrowser, setting: 'codie.tools.openSimpleBrowser.enabled' },
-    { id: 'problems', label: 'Problems', icon: 'error', description: 'Check errors for a particular file', module: toolProblems, setting: 'codie.tools.problems.enabled' },
-    { id: 'runCommands', label: 'Run Commands', icon: 'terminal', description: 'Run commands in the terminal', module: toolRunCommands, setting: 'codie.tools.runCommands.enabled' },
-    { id: 'runNotebooks', label: 'Run Notebooks', icon: 'book', description: 'Run notebook cells', module: toolRunNotebooks, setting: 'codie.tools.runNotebooks.enabled' },
-    { id: 'runTasks', label: 'Run Tasks', icon: 'tasklist', description: 'Run tasks and get their output', module: toolRunTasks, setting: 'codie.tools.runTasks.enabled' },
-    { id: 'runTests', label: 'Run Tests', icon: 'beaker', description: 'Run unit tests', module: toolRunTests, setting: 'codie.tools.runTests.enabled' },
-    { id: 'search', label: 'Search', icon: 'search', description: 'Search and read files in your workspace', module: toolSearch, setting: 'codie.tools.search.enabled' },
-    { id: 'searchResults', label: 'Search Results', icon: 'search', description: 'Get results from the search view', module: toolSearchResults, setting: 'codie.tools.searchResults.enabled' },
-    { id: 'terminalLastCommand', label: 'Terminal Last Command', icon: 'terminal', description: 'Get the last command run in the terminal', module: toolTerminalLastCommand, setting: 'codie.tools.terminalLastCommand.enabled' },
-    { id: 'terminalSelection', label: 'Terminal Selection', icon: 'terminal', description: 'Get the current selection in the terminal', module: toolTerminalSelection, setting: 'codie.tools.terminalSelection.enabled' },
-    { id: 'testFailure', label: 'Test Failure', icon: 'error', description: 'Get info about the last unit test failure', module: toolTestFailure, setting: 'codie.tools.testFailure.enabled' },
-    { id: 'think', label: 'Think', icon: 'lightbulb', description: 'Deep thinking and task organization', module: toolThink, setting: 'codie.tools.think.enabled' },
-    { id: 'todos', label: 'Todos', icon: 'checklist', description: 'Manage and track todo items', module: toolTodos, setting: 'codie.tools.todos.enabled' },
-    { id: 'usages', label: 'Usages', icon: 'symbol-reference', description: 'Find symbol usages', module: toolUsages, setting: 'codie.tools.usages.enabled' },
-    { id: 'vscodeAPI', label: 'VS Code API', icon: 'symbol-method', description: 'VS Code API reference and documentation', module: toolVscodeAPI, setting: 'codie.tools.vscodeAPI.enabled' },
-  ];
-
-  for (const tool of toolConfigs) {
-    const enabled = config.get<boolean>(tool.setting, true);
+  // Register tools from toolSchemas
+  for (const schema of toolSchemas) {
+    // Default: enabled unless config disables
+    const enabled = config.get<boolean>(`codie.tools.${schema.id}.enabled`, true);
+    // Try to import the tool implementation if it exists (by convention: tools/{id}.ts)
+    let execute: Tool['execute'] = async () => { throw new Error('Not implemented'); };
+    try {
+      // Dynamic import (sync require for Node.js/webpack)
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const toolImpl = require(`../tools/${schema.id}`);
+      if (toolImpl && typeof toolImpl.default?.execute === 'function') {
+        execute = toolImpl.default.execute.bind(toolImpl.default);
+      }
+    } catch (err) {
+      // Ignore if not found
+    }
     ToolRegistry.register({
-      id: tool.id,
-      label: tool.label,
-      description: tool.description,
+      id: schema.id,
+      label: schema.label,
+      description: schema.description,
+      icon: schema.icon,
+      inputSchema: schema.inputSchema,
       enabled,
-      icon: tool.icon,
-      execute: (tool.module as any)[tool.id] || (async () => { throw new Error('Not implemented'); })
+      destructive: schema.destructive,
+      execute
     });
   }
 
