@@ -1,5 +1,30 @@
+import type { Tool } from './tools/ToolInterfaces';
+import { MCPToolProvider } from './tools/MCPToolProvider';
+import { ToolRegistry } from './tools/ToolRegistry';
+// Public API for extension tool registration
+import type { ToolProvider as CodieToolProvider, Tool as CodieTool } from './tools/ToolInterfaces';
+// API interface for dynamic tool registration
+export interface CodieExtensionAPI {
+  registerToolProvider(provider: CodieToolProvider): void;
+  registerTool(tool: CodieTool): void;
+}
 
+import * as codieMemory from './codie-memory';
 class CodieChatViewProvider implements vscode.WebviewViewProvider {
+  // Use file-based persistent memory for workspace-wide context
+  private async getLastFileOpIntent(): Promise<boolean> {
+    return await codieMemory.getLastFileOpIntent();
+  }
+  private async setLastFileOpIntent(val: boolean) {
+    await codieMemory.setLastFileOpIntent(val);
+  }
+  // Optionally, store last file op details for richer context
+  private getLastFileOpDetails(): any {
+    return codieMemory.getLastFileOpDetails();
+  }
+  private setLastFileOpDetails(details: any) {
+    codieMemory.setLastFileOpDetails(details);
+  }
   public static readonly viewType = 'codie-chat-view';
   private _webviewView?: vscode.WebviewView;
   private providerRegistry: ProviderRegistry;
@@ -33,8 +58,9 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
       if (!msg || !msg.command) return;
 
       // --- TOOL INTEGRATION ---
+      // --- Unified Tool System: All tool schema surfacing and invocation is routed through ToolRegistry ---
       if (msg.command === 'getToolList') {
-        // Send list of tools (id, label, inputSchema, enabled, destructive)
+        // Always use ToolRegistry for tool listing (built-in, extension, MCP, etc.)
         const tools = ToolRegistry.list().map(t => ({
           id: t.id,
           label: t.label,
@@ -47,6 +73,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (msg.command === 'invokeTool') {
+        // Always use ToolRegistry for tool invocation (built-in, extension, MCP, etc.)
         const { toolId, input, sessionId, requestId } = msg;
         console.log('[Codie] invokeTool received:', { toolId, input, sessionId, requestId });
         if (!toolId) {
@@ -89,8 +116,16 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
           if (!provider) throw new Error(`Provider '${lastProviderName}' not found.`);
           // Always inject Codie persona system prompt
           const systemPrompt = 'You are Codie, a helpful AI assistant for VS Code users. Always refer to yourself as Codie.';
-          let continuePrompt = `${systemPrompt}\n${lastUserMessage}\n${lastAIResponse || ''}\nContinue:`;
-          const aiResponse = await provider.sendMessage(lastModelId, continuePrompt);
+          // Build a minimal chat history for continue: system, user, assistant, then 'Continue:'
+          const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: lastUserMessage },
+          ];
+          if (lastAIResponse) {
+            messages.push({ role: 'assistant', content: lastAIResponse });
+          }
+          messages.push({ role: 'user', content: 'Continue:' });
+          const aiResponse = await provider.sendMessage(lastModelId, messages);
           lastAIResponse = aiResponse;
           webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse });
         } catch (err: any) {
@@ -295,6 +330,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             return;
           }
           // Persona system prompt for Codie, with general instructions and tool schema prepended
+          // Always use ToolRegistry for tool schema surfacing (built-in, extension, MCP, etc.)
           const enabledTools = ToolRegistry.list().filter(t => t.enabled);
           const toolSchemaDesc = enabledTools.map(tool => {
             let schema = '';
@@ -312,8 +348,28 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
           }).join('\n\n');
           // Load general instructions from schema file
           const general = (generalInstructions && Array.isArray(generalInstructions)) ? generalInstructions.join('\n') : '';
-          const systemPrompt = `${general}\n\nAvailable tools you can use (invoke by name and provide required inputs):\n${toolSchemaDesc}\n\nIMPORTANT: If the user requests to create, edit, append, read, or delete a file, ALWAYS use the Edit Files tool instead of giving manual instructions. Respond ONLY with the tool call and required parameters. Do NOT give step-by-step instructions for file operations.`;
-          // Call sendMessage and send response
+          // --- Persistent memory: load conversation history and inject into prompt ---
+          const codieMemory = await import('./codie-memory');
+          const mem = await codieMemory.readMemory();
+          const conversationHistory = Array.isArray(mem.conversationHistory) ? mem.conversationHistory : [];
+          // Only use the last 10 turns for context (configurable)
+          const maxTurns = 10;
+          const turns = conversationHistory.slice(-maxTurns);
+          // Build chat history as array of messages (role/content)
+          const messages = [];
+          // System prompt (persona, tool schema, instructions)
+          messages.push({
+            role: 'system',
+            content: `${general}\n\nAvailable tools you can use (invoke by name and provide required inputs):\n${toolSchemaDesc}\n\nIMPORTANT: Only use tools if the user clearly and explicitly asks for a file or code operation (such as create, edit, append, read, or delete a file). For greetings, general questions, or conversation, respond as Codie would in a friendly, conversational way. Do NOT use tools for greetings, small talk, or general chat.`
+          });
+          // Add previous turns (user/assistant)
+          for (const turn of turns) {
+            if (turn && turn.role && turn.content) {
+              messages.push({ role: turn.role, content: turn.content });
+            }
+          }
+          // Add the new user message
+          messages.push({ role: 'user', content: userText });
           try {
             webviewView.webview.postMessage({ command: 'aiChatResponse', text: 'Thinking...' });
             // Set CONTINUE/CANCEL state for this chat
@@ -322,11 +378,82 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             lastUserMessage = userText;
             lastAIResponse = undefined;
             currentAbortController = undefined;
-            // Always inject Codie persona system prompt with tool schema
-            const promptWithPersona = `${systemPrompt}\n${userText}`;
-            const aiResponse = await provider.sendMessage(modelId, promptWithPersona);
+            // --- Track file operation intent for multi-turn tool calls (persistently) ---
+            const validActions = ['read', 'write', 'append', 'delete'];
+            const userTextLower = userText.toLowerCase();
+            // If this message contains a file op keyword, set lastFileOpIntent true and store details
+            const isFileOp = validActions.some(a => userTextLower.includes(a)) || userTextLower.includes('file');
+            if (isFileOp) {
+              await this.setLastFileOpIntent(true);
+              // Optionally, store details for richer context
+              this.setLastFileOpDetails({
+                action: validActions.find(a => userTextLower.includes(a)) || 'file',
+                text: userText,
+                timestamp: Date.now()
+              });
+            }
+            // If this message is a greeting or general chat, clear lastFileOpIntent and details
+            const isGreeting = /\b(hello|hi|hey|how are you|greetings|what's up|good morning|good afternoon|good evening)\b/i.test(userText);
+            if (isGreeting) {
+              await this.setLastFileOpIntent(false);
+              this.setLastFileOpDetails(null);
+            }
+            // Send chat history array to provider
+            const aiResponse = await provider.sendMessage(modelId, messages);
             lastAIResponse = aiResponse;
-            webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse || '(No response)' });
+
+            // --- Tool call detection logic (multi-turn, persistent) ---
+            // Only treat as a tool call if the response contains a JSON code block with a valid action (read, write, append, delete) and a filePath,
+            // and either the user message contains a file operation keyword OR the last message had file op intent (for follow-ups, persistent).
+            let toolCall = null;
+            try {
+              // Look for a JSON code block
+              const toolCallMatch = aiResponse.match(/```json([\s\S]*?)```/);
+              if (toolCallMatch) {
+                let jsonStr = toolCallMatch[1].trim();
+                const parsed = JSON.parse(jsonStr);
+                if (parsed && validActions.includes(parsed.action) && parsed.filePath && (isFileOp || await this.getLastFileOpIntent())) {
+                  toolCall = { toolId: 'editFiles', input: parsed };
+                  // After a successful tool call, clear lastFileOpIntent and details
+                  await this.setLastFileOpIntent(false);
+                  this.setLastFileOpDetails(null);
+                }
+              }
+            } catch (err) {
+              // Ignore JSON parse errors
+            }
+
+            if (toolCall) {
+              // Invoke the tool and show only the result or a friendly error
+              try {
+                const result = await ToolRegistry.execute(toolCall.toolId, toolCall.input, {});
+                if (result.success) {
+                  let msg = '✅ Tool succeeded.';
+                  if (result.filePath) msg += ` File: ${result.filePath}`;
+                  if (result.content) msg += `\n${result.content}`;
+                  webviewView.webview.postMessage({ command: 'aiChatResponse', text: msg });
+                  // Append user and AI turns to persistent memory
+                  await codieMemory.appendConversation({ role: 'user', content: userText });
+                  await codieMemory.appendConversation({ role: 'assistant', content: msg });
+                } else {
+                  webviewView.webview.postMessage({ command: 'aiChatResponse', text: `❌ Tool error: ${result.error || 'Unknown error.'}` });
+                  // Still append user and AI turns to persistent memory
+                  await codieMemory.appendConversation({ role: 'user', content: userText });
+                  await codieMemory.appendConversation({ role: 'assistant', content: `❌ Tool error: ${result.error || 'Unknown error.'}` });
+                }
+              } catch (err: any) {
+                webviewView.webview.postMessage({ command: 'aiChatResponse', text: `❌ Tool error: ${err?.message || err}` });
+                // Still append user and AI turns to persistent memory
+                await codieMemory.appendConversation({ role: 'user', content: userText });
+                await codieMemory.appendConversation({ role: 'assistant', content: `❌ Tool error: ${err?.message || err}` });
+              }
+            } else {
+              // Show plain chat as usual
+              webviewView.webview.postMessage({ command: 'aiChatResponse', text: aiResponse || '(No response)' });
+              // Append user and AI turns to persistent memory
+              await codieMemory.appendConversation({ role: 'user', content: userText });
+              await codieMemory.appendConversation({ role: 'assistant', content: aiResponse || '(No response)' });
+            }
           } catch (err: any) {
             let userMsg = `Error: ${err?.message || err}`;
             const errStr = (err?.message || err || '').toString();
@@ -379,7 +506,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-import { ToolRegistry, Tool } from '../tools/ToolRegistry';
+import { BuiltinToolProvider } from './tools/BuiltinToolProvider';
 import { toolSchemas } from '../schema/toolSchemas';
 import { generalInstructions } from '../schema/generalSchema';
 
@@ -457,7 +584,30 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
 
 // Top-level export, not inside any class
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
+  // Register MCP tools provider and fetch tools
+  const mcpProvider = new MCPToolProvider();
+  ToolRegistry.registerProvider(mcpProvider);
+  mcpProvider.refresh();
+
+  // Command to refresh MCP tools
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.tools.refreshMCP', async () => {
+      await mcpProvider.refresh();
+      vscode.window.showInformationMessage('MCP tools refreshed.');
+    })
+  );
+  // Public API for other extensions
+  const api: CodieExtensionAPI = {
+    registerToolProvider(provider: CodieToolProvider) {
+      ToolRegistry.registerProvider(provider);
+    },
+    registerTool(tool: CodieTool) {
+      ToolRegistry.registerTool(tool);
+    }
+  };
+  // Register built-in tools (editFiles, etc.)
+  ToolRegistry.registerProvider(new BuiltinToolProvider());
 
   // Command to test connection to Foundry Local and check if models are running
   context.subscriptions.push(
@@ -555,21 +705,20 @@ export function activate(context: vscode.ExtensionContext) {
     try {
       // Dynamic import (sync require for Node.js/webpack)
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const toolImpl = require(`../tools/${schema.id}`);
+  const toolImpl = require(`./tools/${schema.id}`);
       if (toolImpl && typeof toolImpl.default?.execute === 'function') {
         execute = toolImpl.default.execute.bind(toolImpl.default);
       }
     } catch (err) {
       // Ignore if not found
     }
-    ToolRegistry.register({
+  ToolRegistry.registerTool({
       id: schema.id,
       label: schema.label,
       description: schema.description,
       icon: schema.icon,
       inputSchema: schema.inputSchema,
       enabled,
-      destructive: schema.destructive,
       execute
     });
   }
@@ -798,6 +947,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   console.log('Codie extension: activate() called (MINIMAL)');
+  return api;
 }
 
 export function deactivate() {}

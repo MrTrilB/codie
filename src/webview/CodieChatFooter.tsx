@@ -1,17 +1,271 @@
-
 import React, { useState, useRef, useEffect } from 'react';
+import { Textarea, Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, tokens, makeStyles } from '@fluentui/react-components';
+import {
+  Folder16Regular,
+  Send16Regular,
+  ChevronDown16Regular,
+  ChevronUp16Regular,
+  Server16Regular,
+  Settings16Regular,
+  Bot16Regular,
+  Mic16Regular,
+  PlugDisconnected16Regular
+} from '@fluentui/react-icons';
+
+
+// --- Fluent UI v9 makeStyles for CodieChatFooter (migrated from chat.css) ---
+const useFooterStyles = makeStyles({
+  footer: {
+    display: 'flex',
+    flex: '0 0 auto',
+    flexShrink: 0,
+    background: tokens.colorNeutralBackground1,
+    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+    boxShadow: tokens.shadow4,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    alignItems: 'stretch',
+    zIndex: 10,
+    borderRadius: `0 0 ${tokens.borderRadiusLarge} ${tokens.borderRadiusLarge}`,
+    marginTop: 'auto',
+    minHeight: '3.5em',
+  },
+  footerContent: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    alignItems: 'stretch',
+    overflow: 'visible',
+    paddingTop: tokens.spacingVerticalXS,
+    paddingBottom: tokens.spacingVerticalXS,
+    gap: tokens.spacingVerticalXS,
+  },
+  inputForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    background: 'transparent',
+    border: 'none',
+    margin: 0,
+    padding: 0,
+  },
+  inputRowTop: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: tokens.spacingHorizontalXS,
+  },
+  inputRowBottom: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalXS,
+    position: 'relative',
+  },
+  chatFooterInputRow: {
+    position: 'relative',
+    width: '100%',
+    display: 'flex',
+    alignItems: 'stretch',
+  },
+  textarea: {
+    width: '100%',
+    minHeight: '2.5em',
+    maxHeight: '12em',
+    background: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground1,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: 'none',
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalXXL} ${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    fontSize: tokens.fontSizeBase300,
+    margin: 0,
+    boxSizing: 'border-box',
+    transition: 'background 0.15s, box-shadow 0.15s',
+    lineHeight: '1.8em',
+    resize: 'none',
+    '::placeholder': {
+      color: tokens.colorNeutralForeground3,
+      opacity: 1,
+    },
+    ':focus': {
+      background: tokens.colorNeutralBackground1,
+    },
+  },
+  sendButton: {
+    position: 'absolute',
+    right: tokens.spacingHorizontalM,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 2,
+    height: '2.2em',
+    minWidth: '2.2em',
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: 'none',
+  },
+  attachLink: {
+    display: 'flex',
+    alignItems: 'center',
+    maxWidth: '80px',
+    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalXXS}`,
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    fontSize: tokens.fontSizeBase200,
+    cursor: 'pointer',
+    background: 'none',
+    transition: 'color 0.15s, opacity 0.15s',
+    ':hover, :focus': {
+      color: tokens.colorBrandForeground1,
+      opacity: 0.85,
+    },
+  },
+  addContextLabel: {
+    marginLeft: tokens.spacingHorizontalXXS,
+    fontSize: tokens.fontSizeBase100,
+  },
+  sendError: {
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: tokens.fontSizeBase200,
+    marginTop: tokens.spacingVerticalXXS,
+    marginBottom: tokens.spacingVerticalXXS,
+    fontWeight: 500,
+  },
+  flexSpacer: {
+    flex: '1 1 auto',
+    minWidth: 0,
+  },
+  folderIcon: {
+    fontSize: tokens.fontSizeBase200,
+  },
+  toolbarLink: {
+    color: tokens.colorNeutralForeground1,
+    background: 'none',
+    border: 'none',
+    fontSize: tokens.fontSizeBase300,
+    display: 'inline-flex',
+    alignItems: 'center',
+    cursor: 'pointer',
+    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalXXS}`,
+    margin: 0,
+    transition: 'color 0.15s, opacity 0.15s',
+    ':hover, :focus': {
+      color: tokens.colorBrandForeground1,
+      opacity: 0.85,
+    },
+  },
+});
+
+// --- Fluent UI v9 Menu Styles (converted from chat.css) ---
+const useMenuStyles = makeStyles({
+  menuPopover: {
+    background: '#23272e',
+    color: '#fff',
+    border: '1px solid #444',
+    boxShadow: '0 2px 12px #0006',
+    borderRadius: '6px',
+    minWidth: '100px',
+    maxWidth: '250px',
+    padding: '0.2em 0',
+    zIndex: 1000,
+  },
+  menuList: {
+    background: 'transparent',
+    color: '#fff',
+    padding: 0,
+  },
+  menuItem: {
+    padding: '0.35em 0.9em',
+    cursor: 'pointer',
+    background: 'transparent',
+    borderRadius: '4px',
+    fontWeight: 400,
+    display: 'flex',
+    alignItems: 'center',
+    transition: 'background 0.12s',
+    margin: '0 0.15em',
+    selectors: {
+      '&:hover, &:focus': {
+        background: '#2a2d32',
+        color: '#fff',
+      },
+    },
+  },
+  menuButton: {
+    minWidth: '70px',
+    fontSize: tokens.fontSizeBase100,
+    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    marginRight: '8px',
+    height: '2em',
+    lineHeight: 1.1,
+    border: `0 solid ${tokens.colorNeutralStroke1}`,
+  },
+  providerButton: {
+    minWidth: '60px',
+    fontSize: tokens.fontSizeBase100,
+    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    height: '2em',
+    lineHeight: 1.1,
+    border: `0 solid ${tokens.colorNeutralStroke1}`,
+  },
+  menuButtonOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderBottom: 'none',
+  },
+  menuButtonClosed: {
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  menuLabel: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  iconMargin: {
+    marginRight: '6px',
+  },
+  chevronIcon: {
+    marginLeft: '4px',
+    fontSize: '1em',
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  gearIcon: {
+    marginRight: '6px',
+    fontSize: '13px',
+  },
+  gearLabelBold: {
+    fontWeight: 500,
+  },
+  selectedModel: {
+    marginLeft: '0.7em',
+    fontSize: '10px',
+    color: '#fff',
+    opacity: 0.8,
+  },
+});
 interface CodieChatFooterProps {
   onSendUserMessage?: (text: string) => void;
 }
 
 export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMessage }) => {
-
-  // No local tools dropdown state; handled by VS Code QuickPick
-
-
-  // No local tools dropdown logic
-
-
+  const menuStyles = useMenuStyles();
+  const footerStyles = useFooterStyles();
+  // Open state for provider/model menus
+  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   // Handler for Tools button: open VS Code QuickPick
   const handleToolsClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
@@ -19,15 +273,24 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
       window.vscode.postMessage({ command: 'openToolSettings' });
     }
   };
-    // State for selected model group in side menu
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [modelPickerPage, setModelPickerPage] = useState<'categories' | 'models'>('categories');
+  // No longer need selectedGroup/modelPickerPage; use nested Menu for groups
   // State for chat input
   const [chatInput, setChatInput] = useState('');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
-
   // State for error message
   const [sendError, setSendError] = useState<string | null>(null);
+  // Track both alias (key) and label
+  const [selectedProvider, setSelectedProvider] = useState<{ key: string; label: string }>({ key: '', label: '' });
+  // Model picker state
+  const [models, setModels] = useState<Array<{ key: string; label: string }>>([]);
+  const [selectedModel, setSelectedModel] = useState<{ key: string; label: string }>({ key: '', label: '' });
+  const providers = [
+    { key: 'foundry', label: 'Foundry' },
+    { key: 'lmstudio', label: 'LM Studio' },
+    { key: 'ollama', label: 'Ollama' },
+  ];
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Handler for sending a message
   const handleSend = (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
@@ -77,40 +340,26 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
       handleSend();
     }
   };
-    // Providers dropdown state
-  const [showProviders, setShowProviders] = useState(false);
-    // Track both alias (key) and label
-    const [selectedProvider, setSelectedProvider] = useState<{ key: string; label: string }>({ key: '', label: '' });
-    // Model picker state
-  const [showModels, setShowModels] = useState(false);
-    const [models, setModels] = useState<Array<{ key: string; label: string }>>([]);
-    const [selectedModel, setSelectedModel] = useState<{ key: string; label: string }>({ key: '', label: '' });
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
-    const providers = [
-      { key: 'foundry', label: 'FoundryLocal' },
-      { key: 'lmstudio', label: 'LM Studio' },
-      { key: 'ollama', label: 'Ollama' },
-    ];
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Listen for model list and model selection from extension
-    useEffect(() => {
-      const handler = (event: MessageEvent) => {
-        const msg = event.data;
-        if (msg && msg.command === 'modelList') {
-          if (Array.isArray(msg.models)) {
-            setModels(msg.models);
-          }
+  // Listen for model list and model selection from extension
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg && msg.command === 'modelList') {
+        if (Array.isArray(msg.models)) {
+          console.log('Received models:', msg.models);
+          setModels(msg.models);
         }
-        if (msg && msg.command === 'selectedModel') {
-          console.log('[CodieChatFooter] received selectedModel:', msg);
-          if (msg.model && msg.model.key && msg.model.label) {
-            setSelectedModel(msg.model);
+      }
+      if (msg && msg.command === 'selectedModel') {
+        if (msg.model && msg.model.key && msg.model.label) {
+          setSelectedModel(msg.model);
+        }
+        if (msg.provider) {
+          // Map any provider string starting with 'foundry' to canonical Foundry
+          if (typeof msg.provider === 'string' && msg.provider.toLowerCase().startsWith('foundry')) {
+            setSelectedProvider({ key: 'foundry', label: 'Foundry' });
           } else {
-            // Ignore empty/invalid model updates
-            console.warn('[CodieChatFooter] Ignored empty/invalid model:', msg.model);
-          }
-          if (msg.provider) {
             let found = providers.find(
               (p) => p.label === msg.provider || p.key === msg.provider
             );
@@ -121,29 +370,24 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
             }
           }
         }
-      };
-      window.addEventListener('message', handler);
-      return () => window.removeEventListener('message', handler);
-    }, []);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
-    // Close model dropdown on outside click
-    useEffect(() => {
-      if (!showModels) return;
-      const handleClick = (e: MouseEvent) => {
-        if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
-          setShowModels(false);
-        }
-      };
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }, [showModels]);
 
-    // Listen for provider updates from extension
-    useEffect(() => {
-      const handler = (event: MessageEvent) => {
-        const msg = event.data;
-        if (msg && msg.command === 'selectedModel') {
-          if (msg.provider) {
+
+  // Listen for provider updates from extension
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg && msg.command === 'selectedModel') {
+        if (msg.provider) {
+          // Map any provider string starting with 'foundry' to canonical Foundry
+          if (typeof msg.provider === 'string' && msg.provider.toLowerCase().startsWith('foundry')) {
+            setSelectedProvider({ key: 'foundry', label: 'Foundry' });
+          } else {
             let found = providers.find(
               (p) => p.label === msg.provider || p.key === msg.provider
             );
@@ -154,308 +398,275 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
             }
           }
         }
-      };
-      window.addEventListener('message', handler);
-      return () => window.removeEventListener('message', handler);
-    }, []);
-
-    // Close providers dropdown on outside click
-    useEffect(() => {
-      if (!showProviders) return;
-      const handleClick = (e: MouseEvent) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-          setShowProviders(false);
-        }
-      };
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }, [showProviders]);
-
-    // Handler for Model Picker button
-    const handleModelPickerClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.preventDefault();
-      if (window.vscode && selectedProvider.key) {
-        window.vscode.postMessage({ command: 'getModelsForProvider', provider: selectedProvider.key });
-        setShowModels(true);
-        setModelPickerPage('categories');
-        setSelectedGroup(null);
       }
     };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
-    // Handler for selecting a model
-    const handleModelSelect = (model: { key: string; label: string }) => {
-      setShowModels(false);
-      setSelectedModel(model);
-      if (window.vscode) {
-        window.vscode.postMessage({ command: 'setModel', model: model.key });
-      }
-    };
 
-    // Group models by top-level and sub-level (menu > submenu)
-    function groupModelsHierarchical(models: Array<{ key: string; label: string }>) {
-      const groups: Record<string, Record<string, Array<{ key: string; label: string }>>> = {};
-      models.forEach((model) => {
-        const parts = model.label.split('-');
-        let group = parts[0];
-        let subgroup = parts.length > 1 ? parts[1] : '';
-        if (parts.length > 2 && /^\d/.test(parts[1])) {
-          group = parts[0] + '-' + parts[1];
-          subgroup = parts[2] || '';
-        }
-        if (!groups[group]) groups[group] = {};
-        if (!groups[group][subgroup]) groups[group][subgroup] = [];
-        groups[group][subgroup].push(model);
-      });
-      return groups;
+
+
+
+  // Handler for selecting a model
+  const handleModelSelect = (event: any, data: { optionValue?: string }) => {
+    if (!data.optionValue) return;
+    const found = models.find((m) => m.key === data.optionValue);
+    if (window.vscode && found) {
+      window.vscode.postMessage({ command: 'setModel', model: found.key });
+      setSelectedModel({ key: found.key, label: found.label });
     }
+  };
 
-    // Handler for Add Context button
-    const handleAddContext = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.preventDefault();
-      if (window.vscode) {
-        window.vscode.postMessage({ command: 'openAddContextPicker' });
+
+  // Robustly group models: use 'group' property if present, else first word/hyphen, else 'Other'
+  function getModelGroups(models: Array<{ key: string; label: string; group?: string }>) {
+    const groups: Record<string, Array<{ key: string; label: string; group?: string }>> = {};
+    models.forEach((model) => {
+      let group: string;
+      if (model.group && typeof model.group === 'string') {
+        group = model.group;
+      } else {
+        // Try to extract prefix before first space or hyphen
+        const match = model.label.match(/^([\w\-]+?)(?:-|\s)/);
+        group = match ? match[1] : 'Other';
       }
-    };
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(model);
+    });
+    return groups;
+  }
 
-    // Handler for Providers button
-    const handleProvidersClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.preventDefault();
-      setShowProviders((v) => !v);
-    };
+  // Handler for Add Context button
+  const handleAddContext = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'openAddContextPicker' });
+    }
+  };
 
-    // Handler for selecting a provider
-    const handleProviderSelect = (providerLabel: string) => {
-      setShowProviders(false);
-      const found = providers.find((p) => p.label === providerLabel);
-      if (window.vscode && found) {
-        window.vscode.postMessage({ command: 'setProvider', provider: found.key });
-        setSelectedProvider({ key: found.key, label: found.label });
-      }
-    };
 
-    // Handler for gear click
-    const handleProviderGear = (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault();
-      setShowProviders(false);
-      if (window.vscode) {
-        window.vscode.postMessage({ command: 'openProviderSettings' });
-      }
-    };
 
-    return (
-      <>
-        <footer className="codie-chat-footer">
-          <div className="codie-footer-content">
-            <form className="codie-input-form" autoComplete="off">
-              <div className="codie-input-row codie-input-row-top">
-                <a
-                  href="#"
-                  className="codie-attach-link"
-                  id="codie-add-context-btn"
-                  title="Add Context"
-                  aria-label="Add Context"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleAddContext}
-                >
-                  <span className="codicon codicon-folder codie-font-11"></span>
-                  <span className="codie-add-context-label">Add Context...</span>
-                </a>
-                <div className="codie-attached-items"></div>
-              </div>
-              {/* Removed duplicate textarea. Only controlled React textarea below. */}
-        <textarea
-          className="codie-input"
-          placeholder="Type your message..."
-          aria-label="Chat input"
-          rows={2}
-          value={chatInput}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          ref={chatInputRef}
-        ></textarea>
-        {sendError && (
-          <div className="codie-send-error">{sendError}</div>
-        )}
-              <div className="codie-input-row codie-input-row-bottom codie-footer-row-relative">
-                <a
-                  href="#"
-                  className="codie-toolbar-link"
-                  id="codie-ai-provider-btn"
-                  title="AI Provider"
-                  aria-label="AI Provider"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleProvidersClick}
-                >
-                  <span className="codicon codicon-server-environment"></span>
-                </a>
-                {showProviders && (
-                  <div
-                    ref={dropdownRef}
-                    className="codie-provider-dropdown"
-                  >
+  // Handler for selecting a provider
+  const handleProviderSelect = (event: any, data: { optionValue?: string }) => {
+    if (!data.optionValue) return;
+    if (data.optionValue === '__manage__') {
+      handleProviderGear(event);
+      return;
+    }
+    const found = providers.find((p) => p.key === data.optionValue);
+    if (window.vscode && found) {
+      window.vscode.postMessage({ command: 'setProvider', provider: found.key });
+      setSelectedProvider({ key: found.key, label: found.label });
+      // Request models for the selected provider
+      window.vscode.postMessage({ command: 'getModelsForProvider', provider: found.key });
+    }
+  };
+  // On initial load, if a provider is already selected, request its models
+  useEffect(() => {
+    if (selectedProvider.key && window.vscode) {
+      window.vscode.postMessage({ command: 'getModelsForProvider', provider: selectedProvider.key });
+    }
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handler for gear click
+  const handleProviderGear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (window.vscode) {
+      window.vscode.postMessage({ command: 'openProviderSettings' });
+    }
+  };
+
+  return (
+    <>
+      <footer className={footerStyles.footer}>
+        <div className={footerStyles.footerContent}>
+          <form className={footerStyles.inputForm} autoComplete="off">
+            <div className={footerStyles.inputRowTop}>
+              <a
+                href="#"
+                className={footerStyles.attachLink}
+                id="codie-add-context-btn"
+                title="Add Context"
+                aria-label="Add Context"
+                role="button"
+                tabIndex={0}
+                onClick={handleAddContext}
+              >
+                <Folder16Regular className={footerStyles.folderIcon} />
+                <span className={footerStyles.addContextLabel}>Add Context...</span>
+              </a>
+              <div></div>
+            </div>
+            {/* Removed duplicate textarea. Only controlled React textarea below. */}
+            <div className={footerStyles.chatFooterInputRow}>
+              <Textarea
+                className={footerStyles.textarea}
+                placeholder="Type your message..."
+                aria-label="Chat input"
+                rows={2}
+                value={chatInput}
+                onChange={(_, data) => setChatInput(data.value)}
+                onKeyDown={handleKeyDown}
+                ref={chatInputRef}
+                style={{ width: '100%' }}
+              />
+              <Button
+                appearance="primary"
+                aria-label="Send Message"
+                title="Send Message"
+                onClick={handleSend}
+                disabled={!chatInput.trim()}
+                icon={<Send16Regular />}
+                className={footerStyles.sendButton}
+                tabIndex={0}
+              />
+            </div>
+            {sendError && (
+              <div className={footerStyles.sendError}>{sendError}</div>
+            )}
+            <div className={footerStyles.inputRowBottom}>
+              {/* AI Provider Picker: Fluent UI Menu */}
+              <Menu open={providerMenuOpen} onOpenChange={(_, data) => setProviderMenuOpen(data.open)} openOnHover={false}>
+                <MenuTrigger disableButtonEnhancement>
+                  <Button appearance="secondary" className={menuStyles.providerButton}>
+                    {selectedProvider.label ? selectedProvider.label : 'Provider'}{' '}
+                    <span className={menuStyles.chevronIcon}>
+                      {providerMenuOpen ? <ChevronUp16Regular /> : <ChevronDown16Regular />}
+                    </span>
+                  </Button>
+                </MenuTrigger>
+                <MenuPopover className={menuStyles.menuPopover}>
+                  <MenuList className={menuStyles.menuList}>
                     {providers.map((p) => (
-                      <div
+                      <MenuItem
                         key={p.key}
-                        className={`codie-provider-option${selectedProvider.key === p.key ? ' codie-provider-option-selected' : ''}`}
-                        onClick={() => handleProviderSelect(p.label)}
+                        className={menuStyles.menuItem}
+                        onClick={() => {
+                          if (window.vscode) {
+                            window.vscode.postMessage({ command: 'setProvider', provider: p.key });
+                            window.vscode.postMessage({ command: 'getModelsForProvider', provider: p.key });
+                          }
+                          setSelectedProvider({ key: p.key, label: p.label });
+                        }}
                       >
-                        <span className="codicon codicon-server-environment codie-provider-option-icon"></span>
+                        <Server16Regular className={menuStyles.iconMargin} />
                         {p.label}
-                      </div>
+                      </MenuItem>
                     ))}
-                    <div className="codie-provider-dropdown-divider"></div>
-                    <button
-                      onClick={handleProviderGear}
-                      className="codie-provider-gear-btn"
-                      title="Manage Providers"
+                    <MenuItem
+                      key="__manage__"
+                      className={menuStyles.menuItem}
+                      onClick={() => handleProviderGear({ preventDefault: () => {} } as any)}
                     >
-                      <span className="codicon codicon-gear codie-provider-gear-icon"></span>
-                      <span className="codie-provider-gear-label">Manage Providers</span>
-                    </button>
-                  </div>
-                )}
-                <a
-                  href="#"
-                  className="codie-toolbar-link"
-                  id="codie-model-picker-btn"
-                  title="AI Model"
-                  aria-label="AI Model"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleModelPickerClick}
-                >
-                  <span className="codicon codicon-hubot"></span>
-                </a>
-                {showModels && (
-                  <div
-                    ref={modelDropdownRef}
-                    className="codie-model-picker-dropdown"
+                      <Settings16Regular className={menuStyles.gearIcon} />
+                      <span className={menuStyles.gearLabelBold}>Manage Providers</span>
+                    </MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+
+              {/* AI Model Picker: Fluent UI Nested Menu for robust multi-level navigation */}
+              <Menu open={modelMenuOpen} onOpenChange={(_, data) => setModelMenuOpen(data.open)} openOnHover={false}>
+                <MenuTrigger disableButtonEnhancement>
+                  <Button
+                    appearance="secondary"
+                    className={menuStyles.menuButton}
+                    title={selectedModel.label || 'Select model'}
                   >
-                    {models.length === 0 && <div className="codie-models-empty">No models found</div>}
-                    {models.length > 0 && (() => {
-                      const groups = groupModelsHierarchical(models);
+                    {selectedModel.label
+                      ? (() => {
+                          // Show only the first part of the model name (e.g., 'Phi-4', 'Phi-3', 'Phi-4-mini', 'Phi-3-mini')
+                          // If model name contains dash, show up to second dash (e.g., 'Phi-4-mini'), else show full label
+                          const parts = selectedModel.label.split('-');
+                          if (parts.length >= 3) {
+                            // e.g., 'Phi-4-mini' or 'Phi-3-mini'
+                            return parts.slice(0, 3).join('-');
+                          } else if (parts.length === 2) {
+                            // e.g., 'Phi-4'
+                            return parts.slice(0, 2).join('-');
+                          } else {
+                            // e.g., 'GPT4', 'Llama', etc.
+                            return selectedModel.label;
+                          }
+                        })()
+                      : 'Select model'}{' '}
+                    <span className={menuStyles.chevronIcon}>
+                      {modelMenuOpen ? <ChevronUp16Regular /> : <ChevronDown16Regular />}
+                    </span>
+                  </Button>
+                </MenuTrigger>
+                <MenuPopover className={menuStyles.menuPopover}>
+                  <MenuList className={menuStyles.menuList}>
+                    {(() => {
+                      const groups = getModelGroups(models);
                       const groupNames = Object.keys(groups);
-                      // Page 1: Categories
-                      if (modelPickerPage === 'categories') {
-                        return (
-                          <div className="codie-model-picker-groups">
-                            {groupNames.map((group) => (
-                              <div
-                                key={group}
-                                onClick={() => {
-                                  setSelectedGroup(group);
-                                  setModelPickerPage('models');
-                                }}
-                                className="codie-model-picker-group"
-                              >
-                                {group}
-                              </div>
-                            ))}
-                          </div>
-                        );
+                      if (models.length === 0) {
+                        return <MenuItem disabled>No models found</MenuItem>;
                       }
-                      // Page 2: Models in selected group
-                      if (modelPickerPage === 'models' && selectedGroup && groups[selectedGroup]) {
-                        const subgroups = groups[selectedGroup] || {};
-                        const subgroupNames = Object.keys(subgroups).filter((sg) => sg !== '');
-                        return (
-                          <div className="codie-model-picker-models-page">
-                            <div className="codie-model-picker-back" onClick={() => setModelPickerPage('categories')}>
-                              <span className="codicon codicon-arrow-left"></span> Back to categories
-                            </div>
-                            <div className="codie-model-picker-submenu">
-                              {/* Show models with no subgroup first */}
-                              {subgroups[''] && subgroups[''].map((m) => (
-                                <div
-                                  key={m.key}
-                                  className={`codie-provider-option${selectedModel.key === m.key ? ' codie-provider-option-selected' : ''} codie-model-picker-option-root`}
-                                  onClick={() => handleModelSelect(m)}
-                                >
-                                  <span className="codicon codicon-hubot codie-provider-option-icon"></span>
-                                  {m.label}
-                                </div>
-                              ))}
-                              {/* Then show subgroups as headers with their models */}
-                              {subgroupNames.map((sg) => (
-                                <React.Fragment key={sg}>
-                                  <div className="codie-model-picker-subgroup-header">{sg}</div>
-                                  {subgroups[sg].map((m) => (
-                                    <div
-                                      key={m.key}
-                                      className={`codie-provider-option${selectedModel.key === m.key ? ' codie-provider-option-selected' : ''} codie-model-picker-option-sub`}
-                                      onClick={() => handleModelSelect(m)}
-                                    >
-                                      <span className="codicon codicon-hubot codie-provider-option-icon"></span>
-                                      {m.label}
-                                    </div>
-                                  ))}
-                                </React.Fragment>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
+                      return groupNames.map((group) => (
+                        <Menu key={group} openOnHover={true}>
+                          <MenuTrigger disableButtonEnhancement>
+                            <MenuItem className={menuStyles.menuItem}>
+                              <Bot16Regular className={menuStyles.iconMargin} />
+                              {group}
+                            </MenuItem>
+                          </MenuTrigger>
+                          <MenuPopover className={menuStyles.menuPopover}>
+                            <MenuList className={menuStyles.menuList}>
+                              {groups[group].length > 0 ? (
+                                groups[group].map((m) => (
+                                  <MenuItem
+                                    key={m.key}
+                                    className={menuStyles.menuItem}
+                                    onClick={() => {
+                                      if (window.vscode) {
+                                        window.vscode.postMessage({ command: 'setModel', model: m.key });
+                                      }
+                                      setSelectedModel({ key: m.key, label: m.label });
+                                    }}
+                                  >
+                                    <Bot16Regular className={menuStyles.iconMargin} />
+                                    {m.label}
+                                  </MenuItem>
+                                ))
+                              ) : (
+                                <MenuItem disabled>No models in this group</MenuItem>
+                              )}
+                            </MenuList>
+                          </MenuPopover>
+                        </Menu>
+                      ));
                     })()}
-                  </div>
-                )}
-                <span
-                  id="codie-selected-model"
-                  className="codie-selected-model"
-                  title={selectedModel.label}
-                >
-                  {(() => {
-                    if (!selectedModel.label) return '';
-                    // Match version (e.g., 'Phi-4', 'GPT-4.1') or version + '-Mini'
-                    const match = selectedModel.label.match(/^(\w+-\d+(?:\.\d+)?)(-Mini)?/i);
-                    if (match) {
-                      return match[1] + (match[2] || '');
-                    }
-                    return selectedModel.label;
-                  })()}
-                </span>
-                <span className="codie-flex-spacer"></span>
-                <a href="#" className="codie-toolbar-link" title="Voice Chat" aria-label="Voice Chat" role="button" tabIndex={0}>
-                  <span className="codicon codicon-mic"></span>
-                </a>
-                <a
-                  href="#"
-                  id="codie-tools-btn"
-                  className="codie-toolbar-link"
-                  title="Tools"
-                  aria-label="Tools"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleToolsClick}
-                >
-                  <span className="codicon codicon-debug-disconnect"></span>
-                </a>
-                {/* Tools dropdown removed; handled by VS Code QuickPick */}
-                <a
-                  href="#"
-                  id="codie-send-btn"
-                  className="codie-send-link"
-                  title="Send Message"
-                  aria-label="Send Message"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleSend}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                >
-                  <span className="codicon codicon-send"></span>
-                </a>
-              </div>
-            </form>
-          </div>
-        </footer>
-      </>
-    );
-}
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+              
+              <span className={footerStyles.flexSpacer}></span>
+              <a href="#" className={footerStyles.toolbarLink} title="Voice Chat" aria-label="Voice Chat" role="button" tabIndex={0}>
+                <Mic16Regular />
+              </a>
+              <a
+                href="#"
+                id="codie-tools-btn"
+                className={footerStyles.toolbarLink}
+                title="Tools"
+                aria-label="Tools"
+                role="button"
+                tabIndex={0}
+                onClick={handleToolsClick}
+              >
+                <PlugDisconnected16Regular />
+              </a>
+              {/* Tools dropdown removed; handled by VS Code QuickPick */}
+            </div>
+          </form>
+        </div>
+      </footer>
+    </>
+  );
+};
+
 

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["vscode", "node"],
+  "types": ["vscode", "node", "mocha"],
     "module": "commonjs",
     "target": "es2020",
     "outDir": "dist",

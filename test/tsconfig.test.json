@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "types": ["mocha", "node"],
+    "module": "commonjs",
+    "target": "es2020",
+    "outDir": "dist-test",
+    "lib": ["es2020"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+  "strict": true,
+  "forceConsistentCasingInFileNames": true
+  },
+  "include": ["test/memory.test.ts", "src/codie-memory.ts"]
+}

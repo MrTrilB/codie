@@ -1,4 +1,5 @@
 const path = require('path');
+console.log('Loaded webpack.webview.config.js');
 /** @type {import('webpack').Configuration} */
 module.exports = {
   target: 'web',

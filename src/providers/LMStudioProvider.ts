@@ -106,10 +106,15 @@ export class LMStudioProvider implements AIProvider {
   }
 
 
+  /**
+   * Send a message with full chat history for persistent, multi-turn chat.
+   * @param modelId Model to use
+   * @param messages Array of all chat messages (roles: 'system', 'user', 'assistant')
+   * @param options Optional signal for abort
+   */
   async sendMessage(
     modelId: string,
-    message: string,
-    systemPrompt?: string,
+    messages: Array<{ role: string; content: string }>,
     options?: { signal?: AbortSignal }
   ): Promise<string> {
     let aborted = false;
@@ -125,15 +130,18 @@ export class LMStudioProvider implements AIProvider {
         this.activeModel = model;
         this.activeModelId = modelId;
       }
-      let prompt = message;
-      if (systemPrompt) {
-        prompt = `${systemPrompt}\n\n${message}`;
-      }
+      // Use LM Studio's Chat object for multi-turn chat
+      const { Chat } = await import('@lmstudio/sdk');
+      // Ensure roles are typed as 'system' | 'user' | 'assistant'
+      const chatMessages = messages.map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content
+      }));
+      const chat = Chat.from(chatMessages);
       // Read maxTokens from VS Code config
       const config = vscode.workspace.getConfiguration();
       const maxTokens = config.get<number>('codie.providers.lmstudio.maxTokens', 1024);
-      // If LM Studio SDK/model supports maxTokens, pass it as an option
-      const resultPromise = model.respond(prompt, { maxTokens });
+      const resultPromise = model.respond(chat, { maxTokens });
       const result = await (options?.signal ? Promise.race([
         resultPromise,
         new Promise((_, reject) => options.signal?.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))))

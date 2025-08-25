@@ -115,10 +115,15 @@ export class FoundryLocalProvider implements AIProvider {
     }
   }
 
+  /**
+   * Send a message with full chat history for persistent, multi-turn chat.
+   * @param modelId Model to use
+   * @param messages Array of all chat messages (roles: 'system', 'user', 'assistant')
+   * @param options Optional signal for abort
+   */
   async sendMessage(
     modelId: string,
-    message: string,
-    systemPrompt?: string,
+    messages: Array<{ role: string; content: string }>,
     options?: { signal?: AbortSignal }
   ): Promise<string> {
     try {
@@ -135,14 +140,14 @@ export class FoundryLocalProvider implements AIProvider {
       // Read maxTokens from VS Code config
       const config = vscode.workspace.getConfiguration();
       const maxTokens = config.get<number>('codie.providers.foundry.maxTokens', 1024);
-      const messages: ChatCompletionMessageParam[] = [];
-      if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt });
-      }
-      messages.push({ role: 'user', content: message });
+      // Cast messages to ChatCompletionMessageParam[] to satisfy OpenAI type requirements
+      const chatMessages = messages.map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content
+      })) as ChatCompletionMessageParam[];
       const completion = await this.openai.chat.completions.create({
         model: modelId,
-        messages,
+        messages: chatMessages,
         stream: false,
         max_tokens: maxTokens,
       }, {

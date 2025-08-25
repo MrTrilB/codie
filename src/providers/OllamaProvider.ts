@@ -67,10 +67,15 @@ export class OllamaProvider implements AIProvider {
   }
 
 
+  /**
+   * Send a message with full chat history for persistent, multi-turn chat.
+   * @param modelId Model to use
+   * @param messages Array of all chat messages (roles: 'system', 'user', 'assistant')
+   * @param options Optional signal for abort
+   */
   async sendMessage(
     modelId: string,
-    message: string,
-    systemPrompt?: string,
+    messages: Array<{ role: string; content: string }>,
     options?: { signal?: AbortSignal }
   ): Promise<string> {
     let aborted = false;
@@ -80,17 +85,12 @@ export class OllamaProvider implements AIProvider {
         if (options.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
         options.signal.addEventListener('abort', abortHandler);
       }
-      const messages = [];
-      if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt });
-      }
-      messages.push({ role: 'user', content: message });
       // Read maxTokens from VS Code config
       const config = vscode.workspace.getConfiguration();
       const maxTokens = config.get<number>('codie.providers.ollama.maxTokens', 1024);
-      // Add num_predict to the options of the user message (last message)
+      // Add num_predict to the options of the last user message
       const messagesWithOptions = messages.map((msg, idx) =>
-        idx === messages.length - 1 ? { ...msg, options: { num_predict: maxTokens } } : msg
+        idx === messages.length - 1 && msg.role === 'user' ? { ...msg, options: { num_predict: maxTokens } } : msg
       );
       const responsePromise = this.client.chat({
         model: modelId,

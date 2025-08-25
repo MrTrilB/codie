@@ -1,126 +1,47 @@
-/* Error message for sendError in chat footer */
-.codie-send-error {
-	color: #ff6161;
-	font-size: 0.95em;
-	margin-top: 0.2em;
-	margin-left: 0.2em;
-}
-/* === Codie Chat Header Styles === */
-.codie-chat-header {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  background: var(--vscode-sideBar-background, #23272e);
-  border-bottom: 2.5px solid var(--vscode-activityBar-activeBorder, #4F8EF7);
-  padding: 0.7em 0.9em 0.7em 0.9em;
-  min-height: 3.5em;
-  box-shadow: 0 2px 8px #0002;
-  z-index: 10;
-}
-.codie-header-logo {
-	height: 4.2em;
-	width: 4.2em;
-	border-radius: 6px;
-	background: transparent;
-	object-fit: contain;
-	box-shadow: 0 1px 4px #0002;
-}
-.codie-header-title {
-	font-size: 1.35em;
-	font-weight: 700;
-	color: var(--vscode-sideBarTitle-foreground, #fff);
-	letter-spacing: 0.01em;
-	margin-right: 0.5em;
-}
-.codie-header-subtitle {
-	font-size: 0.98em;
-	font-weight: 400;
-	color: var(--vscode-descriptionForeground, #b0b0b0);
-	opacity: 0.85;
-	margin-left: 0.2em;
-}
-/* === Tools Dropdown Styles === */
-.codie-tools-dropdown {
-	position: absolute;
-	right: 0;
-	bottom: 2.8em;
-	background: #23272e;
-	border: 1px solid #444;
-	border-radius: 6px;
-	box-shadow: 0 2px 12px #0006;
-	min-width: 160px;
-	max-width: 250px;
-	z-index: 100;
-	padding: 0.3em 0;
-	color: #fff;
-	display: flex;
-	flex-direction: column;
-}
-.codie-tool-option {
-	padding: 0.5em 1em;
-	display: flex;
-	align-items: center;
-	cursor: pointer;
-	font-size: 1em;
-	background: transparent;
-	transition: background 0.15s;
-}
-.codie-tool-option:hover {
-	background: #2a2e38;
-}
-.codie-tool-option label {
-	display: flex;
-	align-items: center;
-	gap: 0.5em;
-	width: 100%;
-	cursor: pointer;
-}
-/* Model picker back button and models page */
-.codie-model-picker-back {
-	display: flex;
-	align-items: center;
-	gap: 0.4em;
-	padding: 0.4em 1em 0.2em 0.5em;
-	font-size: 0.98em;
-	color: #0078d4;
-	cursor: pointer;
-	font-weight: 600;
-	border-bottom: 1px solid #e0e0e0;
-	background: #f6fafd;
-	margin-bottom: 0.2em;
-	border-radius: 6px 6px 0 0;
-	transition: background 0.12s;
-}
-.codie-model-picker-back:hover {
-	background: #e6f0fa;
-}
-.codie-model-picker-models-page {
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-}
-/* === Model Picker Menu Styles === */
+/* === Force provider/model menus to open above the button === */
+.codie-provider-dropdown,
 .codie-model-picker-dropdown {
-position: absolute;
-	left: 0;
-	bottom: 2.8em;
-	background: #23272e;
-	border: 1px solid #444;
-	border-radius: 6px;
-	box-shadow: 0 2px 12px #0006;
+	top: auto !important;
+	bottom: 100% !important;
+	left: 0 !important;
+	right: auto !important;
+}
+/* === Provider Dropdown Popup Alignment Fix === */
+/* Target the first open Fluent UI Popover with role='listbox' (provider dropdown) */
+.fui-PopoverSurface[role='listbox']:first-of-type {
+	left: 0 !important;
+	right: auto !important;
+	transform: none !important;
+}
+/* === Provider Dropdown Popup Above Button === */
+/* This targets the first open Fluent UI Popover in the chat footer row (provider dropdown) */
+.codie-input-row.codie-input-row-bottom .codie-provider-dropdown-button[aria-expanded="true"] + .fui-PopoverSurface,
+.fui-PopoverSurface.codie-provider-dropdown-popup {
+	top: auto !important;
+	bottom: 100% !important;
+	left: 0 !important;
+	right: auto !important;
+}
+/* === Fluent UI Dropdown Popup Menu Fixes === */
+/* Target Fluent UI v9 Dropdown popup menu (class: fui-PopoverSurface, may change with library updates) */
+.fui-PopoverSurface,
+.fui-Listbox,
+.fui-Listbox__root {
+	background: #23272e !important;
+	color: #fff !important;
+	border: 1px solid #444 !important;
+	box-shadow: 0 2px 12px #0006 !important;
+	border-radius: 6px !important;
 	min-width: 100px;
 	max-width: 250px;
-	z-index: 100;
-	padding: 0;
-	color: #fff;
-	display: flex;
-	flex-direction: column;
+	padding: 0.2em 0;
+	z-index: 1000;
 }
-.codie-models-empty {
-	padding: 0.5em 1em;
-	color: #aaa;
+
+/* Ensure dropdown popup aligns under button (override left offset if needed) */
+.fui-PopoverSurface[style*="left"] {
+	left: 0 !important;
+	right: auto !important;
 }
 
 .codie-model-picker-group {
@@ -188,13 +109,24 @@ position: absolute;
 	display: flex;
 	flex-direction: column;
 }
+
+/* Limit the width of the dropdown buttons to 90px for tight UI */
+.codie-model-dropdown-button {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.codie-provider-dropdown-button{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .codie-provider-option {
 	padding: 0.35em 0.9em;
 	cursor: pointer;
 	background: transparent;
-	border-radius: 4px;
-	font-weight: 400;
-	display: flex;
 	align-items: center;
 	transition: background 0.12s;
 	margin: 0 0.15em;
@@ -214,6 +146,9 @@ position: absolute;
 .codie-provider-option-icon {
 	margin-right: 8px;
 	font-size: 13px;
+}
+.codie-provider-option-icon-margin {
+  margin-right: 6px;
 }
 .codie-provider-dropdown-divider {
 	border-top: 1px solid #444;
@@ -282,7 +217,30 @@ position: absolute;
 
 /* Ensure AI/bot messages stay left and visually distinct */
 .codie-chat-message.bot {
+	background: linear-gradient(90deg, #23272e 0%, #181c20 100%);
+	color: #e0e8f0;
+	border-radius: 4px 16px 16px 16px;
+	padding: 0.7em 1.2em 0.7em 2.4em;
+	margin: 0.5em auto 0.5em 0;
+	max-width: 70%;
+	float: left;
+	clear: both;
+	box-shadow: 0 2px 8px #0002;
+	text-align: left;
+	display: block;
+	border-left: 4px solid #4F8EF7;
+	position: relative;
 }
+	.codie-chat-message.bot::before {
+		content: '\1F916'; /* 🤖 Unicode robot face */
+		position: absolute;
+		left: 0.7em;
+		top: 0.7em;
+		font-size: 1.2em;
+		color: #4F8EF7;
+		opacity: 0.85;
+		pointer-events: none;
+	}
 
 /* Markdown styling for AI output */
 .codie-chat-message.bot h1,

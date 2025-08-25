@@ -107,13 +107,15 @@ function renderAttachedChips(container) {
     var chip = document.createElement('span');
     chip.className = 'codie-attached-item source';
     chip.title = source;
-    // Icon for screenshot or commit
+    // Icon for screenshot, commit, or folder
     if (source.toLowerCase().includes('screenshot')) {
-      chip.innerHTML = '<span class="codicon codicon-device-camera" style="font-size:12px;margin-right:2px;"></span>' + source;
+      chip.innerHTML = '<span class="codicon codicon-device-camera codie-chip-icon"></span>' + source;
     } else if (source.toLowerCase().includes('commit')) {
-      chip.innerHTML = '<span class="codicon codicon-git-commit" style="font-size:12px;margin-right:2px;"></span>' + source;
+      chip.innerHTML = '<span class="codicon codicon-git-commit codie-chip-icon"></span>' + source;
+    } else if (source.toLowerCase().includes('folder')) {
+      chip.innerHTML = '<span class="codicon codicon-folder codie-chip-icon"></span>' + source;
     } else {
-      chip.textContent = source;
+      chip.innerHTML = '<span class="codicon codicon-symbol-file codie-chip-icon"></span>' + source;
     }
     // Add remove button
     var removeBtn = document.createElement('span');
@@ -134,7 +136,10 @@ function renderAttachedChips(container) {
     var chip = document.createElement('span');
     chip.className = 'codie-attached-item file';
     chip.title = item.description || item.label;
-    chip.textContent = item.label;
+    // Use folder or file icon based on label/description
+    var isFolder = (item.label && item.label.toLowerCase().includes('folder')) || (item.description && item.description.toLowerCase().includes('folder'));
+    var iconClass = isFolder ? 'codicon-folder' : 'codicon-symbol-file';
+    chip.innerHTML = '<span class="codicon ' + iconClass + ' codie-chip-icon"></span>' + item.label;
     // Add remove button
     var removeBtn = document.createElement('span');
     removeBtn.className = 'codie-chip-remove';
@@ -168,105 +173,8 @@ let selectedTool = null;
 let toolInputValues = {};
 let toolLoading = false;
 
-// Tool modal state
-let toolModalOpen = false;
 
-function openToolModal() {
-  toolModalOpen = true;
-  renderToolModal();
-}
 
-function closeToolModal() {
-  toolModalOpen = false;
-  renderToolModal();
-}
-
-function renderToolModal() {
-  let modal = document.getElementById('codie-tool-modal');
-  if (!toolModalOpen) {
-    if (modal) modal.style.display = 'none';
-    return;
-  }
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'codie-tool-modal';
-    modal.style.position = 'fixed';
-    modal.style.top = '0';
-    modal.style.left = '0';
-    modal.style.width = '100vw';
-    modal.style.height = '100vh';
-    modal.style.background = 'rgba(0,0,0,0.35)';
-    modal.style.zIndex = 2000;
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    modal.innerHTML = '<div id="codie-tool-modal-inner" style="background:#23272e;padding:2em 2.5em;border-radius:12px;min-width:340px;max-width:90vw;box-shadow:0 4px 32px #0008;position:relative;"></div>';
-    document.body.appendChild(modal);
-  }
-  modal.style.display = 'flex';
-  const inner = modal.querySelector('#codie-tool-modal-inner');
-  if (inner) {
-    inner.innerHTML = '';
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '×';
-    closeBtn.title = 'Close';
-    closeBtn.style.position = 'absolute';
-    closeBtn.style.top = '0.7em';
-    closeBtn.style.right = '1em';
-    closeBtn.style.background = 'none';
-    closeBtn.style.border = 'none';
-    closeBtn.style.color = '#fff';
-    closeBtn.style.fontSize = '1.7em';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.onclick = closeToolModal;
-    inner.appendChild(closeBtn);
-    // Title
-    const title = document.createElement('div');
-    title.textContent = 'Run a Tool';
-    title.style.fontSize = '1.25em';
-    title.style.fontWeight = 'bold';
-    title.style.marginBottom = '1em';
-    title.style.color = '#fff';
-    inner.appendChild(title);
-    // Tool dropdown and form
-    const dropdownDiv = document.createElement('div');
-    dropdownDiv.id = 'codie-tool-modal-dropdown';
-    inner.appendChild(dropdownDiv);
-    const formDiv = document.createElement('div');
-    formDiv.id = 'codie-tool-modal-form';
-    inner.appendChild(formDiv);
-    // Render dropdown and form in modal
-    renderToolDropdown(dropdownDiv, true);
-    renderToolForm(formDiv, true);
-  }
-}
-
-// Add a visible button to open the tool modal
-function addToolModalButton() {
-  let btn = document.getElementById('codie-run-tool-btn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'codie-run-tool-btn';
-    btn.textContent = 'Run Tool';
-    btn.title = 'Manually run a tool (e.g. create/edit files)';
-    btn.style.position = 'absolute';
-    btn.style.bottom = '1.5em';
-    btn.style.right = '1.5em';
-    btn.style.zIndex = 100;
-    btn.style.background = '#4F8EF7';
-    btn.style.color = '#fff';
-    btn.style.border = 'none';
-    btn.style.borderRadius = '8px';
-    btn.style.padding = '0.7em 1.3em';
-    btn.style.fontWeight = 'bold';
-    btn.style.fontSize = '1em';
-    btn.style.boxShadow = '0 2px 8px #0003';
-    btn.style.cursor = 'pointer';
-    btn.onclick = openToolModal;
-    document.body.appendChild(btn);
-  }
-}
 
 // Patch: renderToolDropdown and renderToolForm now accept a parent element and modal flag
 function renderToolDropdown(parent, inModal) {
@@ -274,7 +182,7 @@ function renderToolDropdown(parent, inModal) {
   if (!parent) return;
   parent.innerHTML = '';
   const select = document.createElement('select');
-  select.id = inModal ? 'codie-tool-modal-select' : 'codie-tool-select';
+  select.id = 'codie-tool-select';
   const defaultOpt = document.createElement('option');
   defaultOpt.value = '';
   defaultOpt.textContent = '-- Select a Tool --';
@@ -291,7 +199,7 @@ function renderToolDropdown(parent, inModal) {
     const toolId = select.value;
     selectedTool = toolList.find(t => t.id === toolId) || null;
     toolInputValues = {};
-    renderToolForm(undefined, inModal);
+    renderToolForm();
   };
   parent.appendChild(select);
 }
@@ -306,7 +214,7 @@ function renderToolForm(parent, inModal) {
   const props = schema.properties || selectedTool.inputSchema || {};
   const required = schema.required || [];
   const form = document.createElement('form');
-  form.id = inModal ? 'codie-tool-modal-form' : 'codie-tool-form';
+  form.id = 'codie-tool-form';
   Object.keys(props).forEach(key => {
     const field = props[key] || {};
     const label = document.createElement('label');
@@ -549,24 +457,6 @@ if (window.vscode) {
 }
 
 
-// Always add the tool modal button and modal immediately (not just on DOMContentLoaded)
-addToolModalButton();
-renderToolModal();
-
-// Also re-add the button and modal after React renders (in case React wipes DOM)
-setTimeout(() => {
-  addToolModalButton();
-  renderToolModal();
-}, 1000);
-
-// Defensive: re-add after toolList loads
-window.addEventListener('message', function(event) {
-  const msg = event.data;
-  if (msg && msg.command === 'toolList') {
-    addToolModalButton();
-    renderToolModal();
-  }
-});
 
 if (chatSend) {
   chatSend.addEventListener('click', function(e) {

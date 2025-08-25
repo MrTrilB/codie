@@ -2,7 +2,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-import { registerFoundryLocalProviderTests } from '../providers/FoundryLocalProvider.test';
+import { registerFoundryLocalProviderTests } from '../extension/FoundryLocalProvider.test';
 
 
 export function registerSuiteTests(mocha: Mocha) {
