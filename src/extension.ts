@@ -586,6 +586,37 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
 // Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
+  // On activation, check if codie.foundry.serviceUrl is set; if not, try to detect Foundry local port
+  (async () => {
+    const config = vscode.workspace.getConfiguration();
+    let foundryUrl = config.get<string>('codie.foundry.serviceUrl', '');
+    if (!foundryUrl) {
+      // Try to detect Foundry local port by running 'foundry service status'
+      try {
+        const { execSync } = await import('child_process');
+        const output = execSync('foundry service status', { encoding: 'utf-8' });
+        // Example output: 🟢 Model management service is running on http://127.0.0.1:60244/openai/status
+        let match = output.match(/on (http:\/\/[\w\d\.\-:]+)/);
+        if (match && match[1]) {
+          foundryUrl = match[1];
+        } else {
+          // Try to match full URL if /openai/status is present
+          const matchFull = output.match(/on (http:\/\/[\w\d\.\-:]+)\/openai\/status/);
+          if (matchFull && matchFull[1]) {
+            foundryUrl = matchFull[1];
+          }
+        }
+        if (foundryUrl) {
+          await config.update('codie.foundry.serviceUrl', foundryUrl, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(`Foundry Local port detected: ${foundryUrl} (saved to settings)`);
+        } else {
+          vscode.window.showWarningMessage('Could not auto-detect Foundry Local port. Please set codie.foundry.serviceUrl in settings.');
+        }
+      } catch (err) {
+        vscode.window.showWarningMessage('Could not auto-detect Foundry Local port (is Foundry installed and in PATH?). Please set codie.foundry.serviceUrl in settings.');
+      }
+    }
+  })();
   // Register MCP tools provider and fetch tools
   const mcpProvider = new MCPToolProvider();
   ToolRegistry.registerProvider(mcpProvider);
@@ -774,8 +805,14 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
 
   // Register providers based on settings
   if (foundryEnabled) {
-    console.log('[Codie] Registering FoundryLocalProvider');
-    providerRegistry.register(new FoundryLocalProvider());
+    const foundryUrl = config.get<string>('codie.foundry.serviceUrl', '');
+    if (foundryUrl) {
+      console.log('[Codie] Registering FoundryLocalProvider with endpoint', foundryUrl);
+      providerRegistry.register(new FoundryLocalProvider(foundryUrl));
+    } else {
+      console.log('[Codie] Registering FoundryLocalProvider (auto-discover endpoint)');
+      providerRegistry.register(new FoundryLocalProvider());
+    }
   } else {
     console.log('[Codie] FoundryLocalProvider not enabled');
   }

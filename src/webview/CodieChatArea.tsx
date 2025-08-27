@@ -9,10 +9,12 @@ type ChatMessage = {
 
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter/dist/esm/prism';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { CodieCodeBlock } from './CodieCodeBlock';
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { CodieChatFooter } from './CodieChatFooter';
+
+// Font size for chat messages (user and AI)
+const chatFontSize = '0.95em'; // Change this value to adjust font size globally
 
 // Fluent UI v9 makeStyles for chat area, message bubbles, markdown, and action buttons
 const useChatAreaStyles = makeStyles({
@@ -45,39 +47,31 @@ const useChatAreaStyles = makeStyles({
     background: tokens.colorBrandBackground,
     color: tokens.colorNeutralForegroundOnBrand,
     borderRadius: `${tokens.borderRadiusLarge} ${tokens.borderRadiusSmall} ${tokens.borderRadiusLarge} ${tokens.borderRadiusLarge}`,
-    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalS}`,
     margin: `${tokens.spacingVerticalXS} 0 ${tokens.spacingVerticalXS} auto`,
-    maxWidth: '70%',
+    maxWidth: '100%',
     float: 'right',
     clear: 'both',
     boxShadow: tokens.shadow2,
     textAlign: 'right',
     display: 'block',
+    fontSize: chatFontSize,
   },
   botMsg: {
-    background: tokens.colorNeutralBackground3,
+    background: 'none',
     color: tokens.colorNeutralForeground1,
-    borderRadius: `${tokens.borderRadiusSmall} ${tokens.borderRadiusLarge} ${tokens.borderRadiusLarge} ${tokens.borderRadiusLarge}`,
-    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalM} calc(${tokens.spacingHorizontalXXL} + 1.2em)`,
-    margin: `${tokens.spacingVerticalXS} auto ${tokens.spacingVerticalXS} 0`,
-    maxWidth: '70%',
+    borderRadius: 0,
+    padding: 0,
+    margin: `${tokens.spacingVerticalXS} 0`,
+    maxWidth: '100%',
     float: 'left',
     clear: 'both',
-    boxShadow: tokens.shadow2,
+    boxShadow: 'none',
     textAlign: 'left',
     display: 'block',
-    borderLeft: `4px solid ${tokens.colorBrandStroke1}`,
-    position: 'relative',
-    '::before': {
-      content: '"🤖"',
-      position: 'absolute',
-      left: tokens.spacingHorizontalL,
-      top: tokens.spacingVerticalM,
-      fontSize: '1.2em',
-      color: tokens.colorBrandForeground1,
-      opacity: 0.85,
-      pointerEvents: 'none',
-    },
+    borderLeft: 'none',
+    position: 'static',
+    fontSize: chatFontSize,
   },
   chatLabel: {
     fontSize: tokens.fontSizeBase200,
@@ -95,7 +89,7 @@ const useChatAreaStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
     color: tokens.colorBrandForeground2,
     fontFamily: 'Fira Mono, Consolas, Menlo, monospace',
-    fontSize: '0.98em',
+    fontSize: '0.88em',
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     borderRadius: tokens.borderRadiusMedium,
     margin: `${tokens.spacingVerticalXS} 0`,
@@ -107,7 +101,7 @@ const useChatAreaStyles = makeStyles({
     background: tokens.colorNeutralBackground2,
     color: tokens.colorBrandForeground2,
     fontFamily: 'Fira Mono, Consolas, Menlo, monospace',
-    fontSize: '0.98em',
+    fontSize: '0.88em',
     padding: '0.15em 0.4em',
     borderRadius: tokens.borderRadiusSmall,
   },
@@ -116,7 +110,7 @@ const useChatAreaStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
     color: tokens.colorBrandForeground2,
     fontFamily: 'Fira Mono, Consolas, Menlo, monospace',
-    fontSize: '0.98em',
+    fontSize: '0.88em',
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     borderRadius: tokens.borderRadiusMedium,
     margin: `${tokens.spacingVerticalXS} 0`,
@@ -256,68 +250,28 @@ export const CodieChatArea: React.FC = () => {
         )}
         {messages.map((msg, idx) => {
           const isUser = msg.sender === 'user';
-          const senderLabel = isUser ? 'You' : 'Codie';
-          const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           if (isUser) {
             return (
               <div key={idx} className={styles.userMsg}>
-                <span className={styles.chatLabel}>{senderLabel}</span>
-                <span className={styles.chatTimestamp}>{timestamp}</span>
                 <div>{msg.text}</div>
               </div>
             );
           } else {
             return (
               <div key={idx} className={styles.botMsg}>
-                <span className={styles.chatLabel}>{senderLabel}</span>
-                <span className={styles.chatTimestamp}>{timestamp}</span>
                 <ReactMarkdown
                   components={{
                     code({ node, inline, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '');
-                      // Render diff blocks with Copilot-style icons
-                      if (match && match[1] === 'diff') {
+                      if (!inline) {
                         return (
-                          <pre className={styles.diffBlock}>
-                            {String(children)
-                              .split('\n')
-                              .map((line, i) => {
-                                let icon = null;
-                                let lineClass = 'codie-diff-line';
-                                if (line.startsWith('+')) {
-                                  icon = <span className="codicon codicon-diff-added codie-diff-icon-added"></span>;
-                                  lineClass += ' codie-diff-added';
-                                } else if (line.startsWith('-')) {
-                                  icon = <span className="codicon codicon-diff-removed codie-diff-icon-removed"></span>;
-                                  lineClass += ' codie-diff-removed';
-                                } else if (line.startsWith('@@')) {
-                                  icon = <span className="codicon codicon-diff codie-diff-icon-hunk"></span>;
-                                  lineClass += ' codie-diff-hunk';
-                                } else {
-                                  icon = <span className="codie-diff-icon-empty"></span>;
-                                }
-                                return (
-                                  <div key={i} className={lineClass + ' codie-diff-line-flex'}>
-                                    {icon}
-                                    <span className="codie-diff-line-content">{line}</span>
-                                  </div>
-                                );
-                              })}
-                          </pre>
+                          <CodieCodeBlock
+                            code={String(children).replace(/\n$/, '')}
+                            language={match ? match[1] : undefined}
+                          />
                         );
                       }
-                      // Render code blocks with syntax highlighting
-                      return !inline ? (
-                        <SyntaxHighlighter
-                          style={oneDark}
-                          language={match ? match[1] : undefined}
-                          PreTag="div"
-                          customStyle={{ borderRadius: 6, margin: '0.5em 0', fontSize: '0.98em', padding: '0.7em 1em' }}
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
-                      ) : (
+                      return (
                         <code className={styles.codeInline + (className ? ' ' + className : '')} {...props}>
                           {children}
                         </code>
