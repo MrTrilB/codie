@@ -24,8 +24,9 @@ export const newTool: Tool = {
       const fs = vscode.workspace.fs;
       const newFolder = vscode.Uri.file(`${wsRoot}/${name}`);
       await fs.createDirectory(newFolder);
-      const readmeUri = vscode.Uri.joinPath(newFolder, 'README.md');
-      await fs.writeFile(readmeUri, Buffer.from(`# ${name}\n`));
+  const path = require('path');
+  const readmeUri = vscode.Uri.file(path.join(newFolder.fsPath, 'README.md'));
+  await fs.writeFile(readmeUri, Buffer.from(`# ${name}\n`));
       return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };

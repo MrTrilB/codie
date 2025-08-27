@@ -479,12 +479,13 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtmlForWebview(webview: vscode.Webview): string {
-    const extensionUri = this.context.extensionUri;
-    const mainScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'main.js'));
-    const reactBundleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'chat.css'));
-    const codiconCssUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'codicon.css'));
-    const codieLogoUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'Codie.png'));
+  const extensionUri = this.context.extensionUri;
+  const path = require('path');
+  const mainScriptUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'main.js')));
+  const reactBundleUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'webview.js')));
+  const styleUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'chat.css')));
+  const codiconCssUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'codicon.css')));
+  const codieLogoUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'Codie.png')));
     return `
       <!DOCTYPE html>
       <head>
@@ -547,8 +548,8 @@ class CodieTreeItem extends vscode.TreeItem {
 }
 
 class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<CodieTreeItem | undefined | void> = new vscode.EventEmitter<CodieTreeItem | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<CodieTreeItem | undefined | void> = this._onDidChangeTreeData.event;
+  private _onDidChangeTreeData: vscode.EventEmitter<CodieTreeItem | null | undefined> = new vscode.EventEmitter<CodieTreeItem | null | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<CodieTreeItem | null | undefined> = this._onDidChangeTreeData.event;
 
   getTreeItem(element: CodieTreeItem): vscode.TreeItem {
     return element;
