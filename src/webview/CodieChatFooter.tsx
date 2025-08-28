@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ToolManagementModal } from './ToolManagementModal';
 import { Textarea, Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, tokens, makeStyles } from '@fluentui/react-components';
 import {
   Folder16Regular,
@@ -266,13 +267,20 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
   // Open state for provider/model menus
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  // Handler for Tools button: open VS Code QuickPick
+  // Tool management modal state removed
+  // MCP settings modal state removed
+  // Handler for Tools button: open global tools dropdown
   const handleToolsClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (window.vscode) {
-      window.vscode.postMessage({ command: 'openToolSettings' });
+      window.vscode.postMessage({ command: 'executeCommand', commandName: 'codie.tools.manage' });
     }
   };
+
+  // Tool enable/disable handler removed (tools modal no longer used)
+
+  // Open MCP settings modal
+  // MCP settings modal handlers removed
   // No longer need selectedGroup/modelPickerPage; use nested Menu for groups
   // State for chat input
   const [chatInput, setChatInput] = useState('');
@@ -347,7 +355,6 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
       const msg = event.data;
       if (msg && msg.command === 'modelList') {
         if (Array.isArray(msg.models)) {
-          console.log('Received models:', msg.models);
           setModels(msg.models);
         }
       }
@@ -356,13 +363,10 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
           setSelectedModel(msg.model);
         }
         if (msg.provider) {
-          // Map any provider string starting with 'foundry' to canonical Foundry
           if (typeof msg.provider === 'string' && msg.provider.toLowerCase().startsWith('foundry')) {
             setSelectedProvider({ key: 'foundry', label: 'Foundry' });
           } else {
-            let found = providers.find(
-              (p) => p.label === msg.provider || p.key === msg.provider
-            );
+            let found = providers.find((p) => p.label === msg.provider || p.key === msg.provider);
             if (found) {
               setSelectedProvider({ key: found.key, label: found.label });
             } else {
@@ -371,6 +375,8 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
           }
         }
       }
+      // Listen for tool list from extension (removed)
+      // MCP settings message handler removed
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -660,7 +666,7 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
               >
                 <PlugDisconnected16Regular />
               </a>
-              {/* Tools dropdown removed; handled by VS Code QuickPick */}
+              {/* Tool management modal removed; Tools button now opens global dropdown */}
             </div>
           </form>
         </div>

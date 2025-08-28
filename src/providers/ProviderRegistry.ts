@@ -1,7 +1,13 @@
 import { AIProvider, AIModelInfo } from './AIProvider';
+import { MCPProvider } from './MCPProvider';
 
 export class ProviderRegistry {
   private providers: AIProvider[] = [];
+
+  constructor() {
+    // Register MCPProvider by default (endpoint and apiKey can be made configurable)
+    this.register(new MCPProvider());
+  }
 
   register(provider: AIProvider) {
     this.providers.push(provider);

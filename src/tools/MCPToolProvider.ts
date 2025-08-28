@@ -1,25 +1,33 @@
 import { Tool, ToolProvider, ToolContext } from './ToolInterfaces';
 import { ToolRegistry } from './ToolRegistry';
 
-// Placeholder: Replace with actual MCP endpoint or make configurable
+
 const DEFAULT_MCP_ENDPOINT = 'http://localhost:8080/tools';
 
 export class MCPToolProvider implements ToolProvider {
   id = 'mcp';
   label = 'MCP Tools';
   private endpoint: string;
+  private apiKey: string;
   private tools: Tool[] = [];
 
-  constructor(endpoint?: string) {
+  constructor(endpoint?: string, apiKey?: string) {
     this.endpoint = endpoint || DEFAULT_MCP_ENDPOINT;
+    this.apiKey = apiKey || '';
+  }
+
+  setConfig({ apiKey, endpoint }: { apiKey?: string; endpoint?: string }) {
+    if (typeof apiKey === 'string') this.apiKey = apiKey;
+    if (typeof endpoint === 'string') this.endpoint = endpoint;
   }
 
   async fetchTools(): Promise<Tool[]> {
     try {
-      const resp = await fetch(this.endpoint);
+      const resp = await fetch(this.endpoint, {
+        headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : undefined
+      });
       if (!resp.ok) throw new Error(`Failed to fetch MCP tools: ${resp.status}`);
       const data = await resp.json();
-      // Expecting array of { id, label, description, inputSchema, outputSchema }
       this.tools = (data || []).map((tool: any) => this.makeTool(tool));
       return this.tools;
     } catch (err) {
@@ -40,6 +48,8 @@ export class MCPToolProvider implements ToolProvider {
   }
 
   private makeTool(toolDef: any): Tool {
+    const endpoint = this.endpoint;
+    const apiKey = this.apiKey;
     return {
       id: toolDef.id,
       label: toolDef.label || toolDef.id,
@@ -47,13 +57,16 @@ export class MCPToolProvider implements ToolProvider {
       icon: toolDef.icon || 'plug',
       inputSchema: toolDef.inputSchema || {},
       outputSchema: toolDef.outputSchema || {},
-  provider: 'mcp',
-  enabled: true,
+      provider: 'mcp',
+      enabled: true,
       async execute(input: any, context?: ToolContext) {
         try {
-          const resp = await fetch(`${DEFAULT_MCP_ENDPOINT}/${toolDef.id}/invoke`, {
+          const resp = await fetch(`${endpoint}/${toolDef.id}/invoke`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+            },
             body: JSON.stringify({ input, context })
           });
           if (!resp.ok) throw new Error(`MCP tool invoke failed: ${resp.status}`);

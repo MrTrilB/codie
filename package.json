@@ -98,6 +98,18 @@
             "description": "MCP tool server endpoint URI (default: http://localhost:3333)",
             "scope": "window"
           },
+          "codie.tools.mcp.apiKey": {
+            "type": "string",
+            "default": "",
+            "description": "Context7 MCP API key for authenticating with the MCP tool server.",
+            "scope": "window"
+          },
+          "codie.tools.context7.apiKey": {
+            "type": "string",
+            "default": "",
+            "description": "Context7 API key for authenticating with the Context7 MCP tool server. Use this for Context7 connections only.",
+            "scope": "window"
+          },
           "codie.tools.changes.enabled": {
             "type": "boolean",
             "default": true,

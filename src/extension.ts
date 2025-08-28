@@ -55,6 +55,15 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
     // Listen for messages from the webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
+      // Handle generic command execution from webview (e.g., open tools dropdown)
+      if (msg.command === 'executeCommand' && typeof msg.commandName === 'string') {
+        try {
+          await vscode.commands.executeCommand(msg.commandName);
+        } catch (err) {
+          console.error('[Codie] Failed to execute command from webview:', msg.commandName, err);
+        }
+        return;
+      }
       if (!msg || !msg.command) return;
 
       // --- TOOL INTEGRATION ---
@@ -152,8 +161,60 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
 
       switch (msg.command) {
         case 'openToolSettings': {
-          // Open the VS Code QuickPick for managing tools
           await vscode.commands.executeCommand('codie.tools.manage');
+          break;
+        }
+        case 'getToolList': {
+          // Return all tools (with enabled state)
+          const tools = ToolRegistry.list().map(t => ({
+            id: t.id,
+            label: t.label,
+            description: t.description,
+            enabled: t.enabled,
+            provider: t.provider
+          }));
+          webviewView.webview.postMessage({ command: 'toolList', tools });
+          break;
+        }
+        case 'setToolEnabled': {
+          // Update enabled state and persist to config
+          const { toolId, enabled } = msg;
+          const toolConfig = vscode.workspace.getConfiguration();
+          await toolConfig.update(`codie.tools.${toolId}.enabled`, enabled, vscode.ConfigurationTarget.Global);
+          const tool = ToolRegistry.get(toolId);
+          if (tool) tool.enabled = enabled;
+          // Optionally, send updated list
+          const tools = ToolRegistry.list().map(t => ({
+            id: t.id,
+            label: t.label,
+            description: t.description,
+            enabled: t.enabled,
+            provider: t.provider
+          }));
+          webviewView.webview.postMessage({ command: 'toolList', tools });
+          break;
+        }
+        case 'getMCPSettings': {
+          // Return MCP API key and endpoint from config
+          const mcpConfig = vscode.workspace.getConfiguration();
+          const apiKey = mcpConfig.get('codie.mcp.apiKey', '');
+          const endpoint = mcpConfig.get('codie.mcp.endpoint', 'http://localhost:8080/tools');
+          webviewView.webview.postMessage({ command: 'mcpSettings', apiKey, endpoint });
+          break;
+        }
+        case 'setMCPSettings': {
+          // Save MCP API key and endpoint to config, update MCPToolProvider
+          const { apiKey, endpoint } = msg;
+          const mcpConfig = vscode.workspace.getConfiguration();
+          await mcpConfig.update('codie.mcp.apiKey', apiKey, vscode.ConfigurationTarget.Global);
+          await mcpConfig.update('codie.mcp.endpoint', endpoint, vscode.ConfigurationTarget.Global);
+          // Update MCPToolProvider instance if available
+          const globalMcpProvider = (global as any).codieMcpProvider;
+          if (globalMcpProvider) {
+            globalMcpProvider.setConfig({ apiKey, endpoint });
+            await globalMcpProvider.refresh();
+          }
+          webviewView.webview.postMessage({ command: 'mcpSettings', apiKey, endpoint });
           break;
         }
         case 'getModelsForProvider': {
@@ -587,6 +648,8 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 // Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
   // On activation, check if codie.foundry.serviceUrl is set; if not, try to detect Foundry local port
+  // Declare toolConfig for use throughout activation
+  const toolConfig = vscode.workspace.getConfiguration();
   (async () => {
     const config = vscode.workspace.getConfiguration();
     let foundryUrl = config.get<string>('codie.foundry.serviceUrl', '');
@@ -617,10 +680,27 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
       }
     }
   })();
+
   // Register MCP tools provider and fetch tools
-  const mcpProvider = new MCPToolProvider();
+  // Load MCP/Context7 config from settings
+  // The Context7 API key is now configured via 'codie.tools.context7.apiKey'.
+  // For backward compatibility, 'codie.tools.mcp.apiKey' is still supported for non-Context7 endpoints.
+  // The logic below selects the correct API key based on the endpoint:
+  //   - If the endpoint contains 'context7' or 'api.context7.ai', use the Context7 API key.
+  //   - Otherwise, use the generic MCP API key.
+  const config = vscode.workspace.getConfiguration();
+  const mcpEndpoint = config.get('codie.tools.mcp.endpoint', 'http://localhost:8080/tools');
+  const context7ApiKey = config.get('codie.tools.context7.apiKey', '');
+  const mcpApiKey = config.get('codie.tools.mcp.apiKey', '');
+  let apiKeyToUse = mcpApiKey;
+  if (mcpEndpoint.includes('context7') || mcpEndpoint.includes('api.context7.ai')) {
+    apiKeyToUse = context7ApiKey;
+  }
+  const mcpProvider = new MCPToolProvider(mcpEndpoint, apiKeyToUse);
   ToolRegistry.registerProvider(mcpProvider);
   mcpProvider.refresh();
+  // Make mcpProvider globally accessible for message handlers
+  (global as any).codieMcpProvider = mcpProvider;
 
   // Command to refresh MCP tools
   context.subscriptions.push(
@@ -727,11 +807,11 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
     })
   );
   // Tool configuration and registration
-  const config = vscode.workspace.getConfiguration();
+  // toolConfig already declared above
   // Register tools from toolSchemas
   for (const schema of toolSchemas) {
     // Default: enabled unless config disables
-    const enabled = config.get<boolean>(`codie.tools.${schema.id}.enabled`, true);
+  const enabled = toolConfig.get<boolean>(`codie.tools.${schema.id}.enabled`, true);
     // Try to import the tool implementation if it exists (by convention: tools/{id}.ts)
     let execute: Tool['execute'] = async () => { throw new Error('Not implemented'); };
     try {
@@ -781,7 +861,7 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
         for (const tool of allTools) {
           const shouldEnable = picks.some(p => p.id === tool.id);
           if (tool.enabled !== shouldEnable) {
-            await config.update(`codie.tools.${tool.id}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
+            await toolConfig.update(`codie.tools.${tool.id}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
             tool.enabled = shouldEnable;
           }
         }
@@ -794,9 +874,9 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
 
 
   // Debug: Log provider config values
-  const foundryEnabled = config.get('codie.providers.foundry.enabled', true);
-  const lmstudioEnabled = config.get('codie.providers.lmstudio.enabled', true);
-  const ollamaEnabled = config.get('codie.providers.ollama.enabled', true);
+  const foundryEnabled = toolConfig.get('codie.providers.foundry.enabled', true);
+  const lmstudioEnabled = toolConfig.get('codie.providers.lmstudio.enabled', true);
+  const ollamaEnabled = toolConfig.get('codie.providers.ollama.enabled', true);
   console.log('[Codie] Provider config:', {
     foundryEnabled,
     lmstudioEnabled,
@@ -805,7 +885,7 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
 
   // Register providers based on settings
   if (foundryEnabled) {
-    const foundryUrl = config.get<string>('codie.foundry.serviceUrl', '');
+  const foundryUrl = toolConfig.get<string>('codie.foundry.serviceUrl', '');
     if (foundryUrl) {
       console.log('[Codie] Registering FoundryLocalProvider with endpoint', foundryUrl);
       providerRegistry.register(new FoundryLocalProvider(foundryUrl));
@@ -817,14 +897,14 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
     console.log('[Codie] FoundryLocalProvider not enabled');
   }
   if (lmstudioEnabled) {
-    const lmstudioEndpoint = config.get('codie.providers.lmstudio.endpoint', 'http://localhost:1234/v1');
+  const lmstudioEndpoint = toolConfig.get('codie.providers.lmstudio.endpoint', 'http://localhost:1234/v1');
     console.log('[Codie] Registering LMStudioProvider at', lmstudioEndpoint);
     providerRegistry.register(new LMStudioProvider(lmstudioEndpoint));
   } else {
     console.log('[Codie] LMStudioProvider not enabled');
   }
   if (ollamaEnabled) {
-    const ollamaEndpoint = config.get('codie.providers.ollama.endpoint', 'http://localhost:11434/v1');
+  const ollamaEndpoint = toolConfig.get('codie.providers.ollama.endpoint', 'http://localhost:11434/v1');
     console.log('[Codie] Registering OllamaProvider at', ollamaEndpoint);
     providerRegistry.register(new OllamaProvider(ollamaEndpoint));
   } else {
@@ -875,9 +955,9 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
         { key: 'lmstudio', name: 'LM Studio', getName: () => new LMStudioProvider().getName() },
         { key: 'ollama', name: 'Ollama', getName: () => new OllamaProvider().getName() },
       ];
-      const config = vscode.workspace.getConfiguration();
+  const providerConfig = vscode.workspace.getConfiguration();
       const picks = providerInfos.map(info => {
-        const enabled = config.get(`codie.providers.${info.key}.enabled`, true);
+  const enabled = providerConfig.get(`codie.providers.${info.key}.enabled`, true);
         return {
           label: info.getName(),
           picked: enabled,
@@ -893,7 +973,7 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
         const selectedIds = new Set(selected.map(s => s.id));
         for (const info of providerInfos) {
           const shouldEnable = selectedIds.has(info.key);
-          await config.update(`codie.providers.${info.key}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
+          await providerConfig.update(`codie.providers.${info.key}.enabled`, shouldEnable, vscode.ConfigurationTarget.Global);
         }
         // If the currently selected provider is now disabled, clear selection
         const currentProvider = context.workspaceState.get('codie.selectedProvider', '');
