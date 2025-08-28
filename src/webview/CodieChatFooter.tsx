@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ToolManagementModal } from './ToolManagementModal';
 import { Textarea, Button, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, tokens, makeStyles } from '@fluentui/react-components';
 import {
   Folder16Regular,
@@ -653,6 +652,22 @@ export const CodieChatFooter: React.FC<CodieChatFooterProps> = ({ onSendUserMess
               <span className={footerStyles.flexSpacer}></span>
               <a href="#" className={footerStyles.toolbarLink} title="Voice Chat" aria-label="Voice Chat" role="button" tabIndex={0}>
                 <Mic16Regular />
+              </a>
+              <a
+                href="#"
+                id="codie-mcp-btn"
+                className={footerStyles.toolbarLink}
+                title="Manage MCP Servers"
+                aria-label="Manage MCP Servers"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (window.vscode) {
+                    window.vscode.postMessage({ command: 'executeCommand', commandName: 'codie.tools.manageMCPServers' });
+                  }
+                }}
+              >
+                <Server16Regular />
               </a>
               <a
                 href="#"

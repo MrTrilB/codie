@@ -4,10 +4,13 @@ console.log('Loaded webpack.webview.config.js');
 module.exports = {
   target: 'web',
   mode: 'production',
-  entry: './src/webview/index.tsx',
+  entry: {
+    webview: './src/webview/index.tsx',
+    mcpServerManager: './src/webview/MCPServerManager.tsx',
+  },
   output: {
     path: path.resolve(__dirname, 'media'),
-    filename: 'webview.js',
+    filename: '[name].js',
     // No libraryTarget: plain script for browser
   },
   devtool: 'source-map',

@@ -1,3 +1,4 @@
+import * as path from 'path';
 import type { Tool } from './tools/ToolInterfaces';
 import { MCPToolProvider } from './tools/MCPToolProvider';
 import { ToolRegistry } from './tools/ToolRegistry';
@@ -647,6 +648,73 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
 // Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
+  // Register command to open MCP server management webview
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.tools.manageMCPServers', async () => {
+      const panel = vscode.window.createWebviewPanel(
+        'codie-mcp-server-manager',
+        'Manage MCP Servers',
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
+        }
+      );
+      // Send current MCP server list to webview
+      const config = vscode.workspace.getConfiguration();
+      const mcpServers = config.get<any[]>('codie.tools.mcp.servers', []);
+      // Use only the local, bundled JS for MCP Manager
+      const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.js')));
+      const styleUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'chat.css')));
+      const mcpStyleUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.css')));
+      panel.webview.html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <link href="${styleUri}" rel="stylesheet">
+          <link href="${mcpStyleUri}" rel="stylesheet">
+          <title>Manage MCP Servers</title>
+        </head>
+        <body>
+          <div id="root"></div>
+          <script>
+            window.initialMcpServers = ${JSON.stringify(mcpServers)};
+            window.acquireVsCodeApi = acquireVsCodeApi;
+          </script>
+          <script src="${scriptUri}"></script>
+        </body>
+        </html>
+      `;
+      // Handle messages from the webview (save/update MCP servers)
+      panel.webview.onDidReceiveMessage(async (msg) => {
+        if (msg && msg.command === 'saveMcpServers' && Array.isArray(msg.servers)) {
+          await config.update('codie.tools.mcp.servers', msg.servers, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('MCP server list updated.');
+          // Reload MCPToolProviders
+          // Remove all previous MCPToolProviders from ToolRegistry
+          if ((global as any).codieMcpProviders) {
+            for (const provider of (global as any).codieMcpProviders) {
+              ToolRegistry.unregisterProvider?.(provider); // If unregisterProvider exists
+            }
+          }
+          // Register new providers
+          const newProviders = [];
+          for (const server of msg.servers) {
+            if (!server || !server.endpoint) continue;
+            const provider = new MCPToolProvider(server.endpoint, server.apiKey, server.label);
+            ToolRegistry.registerProvider(provider);
+            provider.refresh();
+            newProviders.push(provider);
+          }
+          (global as any).codieMcpProviders = newProviders;
+          // Send updated list back to webview
+          panel.webview.postMessage({ command: 'updateMcpServers', servers: msg.servers });
+        }
+      });
+    })
+  );
   // On activation, check if codie.foundry.serviceUrl is set; if not, try to detect Foundry local port
   // Declare toolConfig for use throughout activation
   const toolConfig = vscode.workspace.getConfiguration();
@@ -681,32 +749,27 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
     }
   })();
 
-  // Register MCP tools provider and fetch tools
-  // Load MCP/Context7 config from settings
-  // The Context7 API key is now configured via 'codie.tools.context7.apiKey'.
-  // For backward compatibility, 'codie.tools.mcp.apiKey' is still supported for non-Context7 endpoints.
-  // The logic below selects the correct API key based on the endpoint:
-  //   - If the endpoint contains 'context7' or 'api.context7.ai', use the Context7 API key.
-  //   - Otherwise, use the generic MCP API key.
+  // Register MCP tools providers for all configured servers
   const config = vscode.workspace.getConfiguration();
-  const mcpEndpoint = config.get('codie.tools.mcp.endpoint', 'http://localhost:8080/tools');
-  const context7ApiKey = config.get('codie.tools.context7.apiKey', '');
-  const mcpApiKey = config.get('codie.tools.mcp.apiKey', '');
-  let apiKeyToUse = mcpApiKey;
-  if (mcpEndpoint.includes('context7') || mcpEndpoint.includes('api.context7.ai')) {
-    apiKeyToUse = context7ApiKey;
+  const mcpServers = config.get<any[]>('codie.tools.mcp.servers', []);
+  const mcpProviders: MCPToolProvider[] = [];
+  for (const server of mcpServers) {
+    if (!server || !server.endpoint) continue;
+    const provider = new MCPToolProvider(server.endpoint, server.apiKey, server.label);
+    ToolRegistry.registerProvider(provider);
+    provider.refresh();
+    mcpProviders.push(provider);
   }
-  const mcpProvider = new MCPToolProvider(mcpEndpoint, apiKeyToUse);
-  ToolRegistry.registerProvider(mcpProvider);
-  mcpProvider.refresh();
-  // Make mcpProvider globally accessible for message handlers
-  (global as any).codieMcpProvider = mcpProvider;
+  // Make all MCP providers globally accessible for message handlers (array)
+  (global as any).codieMcpProviders = mcpProviders;
 
-  // Command to refresh MCP tools
+  // Command to refresh all MCP tools
   context.subscriptions.push(
     vscode.commands.registerCommand('codie.tools.refreshMCP', async () => {
-      await mcpProvider.refresh();
-      vscode.window.showInformationMessage('MCP tools refreshed.');
+      for (const provider of mcpProviders) {
+        await provider.refresh();
+      }
+      vscode.window.showInformationMessage('All MCP tools refreshed.');
     })
   );
   // Public API for other extensions
@@ -846,8 +909,14 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
         kind: vscode.QuickPickItemKind.Separator
       });
       for (const t of allTools) {
+        // Show provider label for each tool (e.g., 'Tool Name (Provider)')
+        let providerLabel = t.provider ? String(t.provider) : '';
+        let label = `${t.icon ? `$(${t.icon}) ` : ''}${t.label}`;
+        if (providerLabel && providerLabel !== 'builtin') {
+          label += ` (${providerLabel})`;
+        }
         quickPickItems.push({
-          label: `${t.icon ? `$(${t.icon}) ` : ''}${t.label}`,
+          label,
           description: t.description,
           picked: t.enabled,
           id: t.id

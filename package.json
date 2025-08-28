@@ -92,24 +92,37 @@
       {
         "title": "Tools",
         "properties": {
-          "codie.tools.mcp.endpoint": {
-            "type": "string",
-            "default": "http://localhost:3333",
-            "description": "MCP tool server endpoint URI (default: http://localhost:3333)",
+          "codie.tools.mcp.servers": {
+            "type": "array",
+            "default": [
+              {
+                "endpoint": "http://localhost:3333",
+                "apiKey": "",
+                "label": "Local MCP"
+              }
+            ],
+            "description": "Array of MCP/Context7 tool server connections. Each entry should be an object with 'endpoint', 'apiKey', and optional 'label'.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "description": "MCP tool server endpoint URI (e.g. http://localhost:3333)"
+                },
+                "apiKey": {
+                  "type": "string",
+                  "description": "API key for authenticating with the MCP tool server."
+                },
+                "label": {
+                  "type": "string",
+                  "description": "Optional label for this MCP server connection."
+                }
+              },
+              "required": ["endpoint", "apiKey"]
+            },
             "scope": "window"
           },
-          "codie.tools.mcp.apiKey": {
-            "type": "string",
-            "default": "",
-            "description": "Context7 MCP API key for authenticating with the MCP tool server.",
-            "scope": "window"
-          },
-          "codie.tools.context7.apiKey": {
-            "type": "string",
-            "default": "",
-            "description": "Context7 API key for authenticating with the Context7 MCP tool server. Use this for Context7 connections only.",
-            "scope": "window"
-          },
+
           "codie.tools.changes.enabled": {
             "type": "boolean",
             "default": true,
@@ -296,6 +309,12 @@
         "title": "Manage Codie Tools",
         "category": "Codie",
         "description": "Enable or disable Codie developer tools"
+      },
+      {
+        "command": "codie.tools.manageMCPServers",
+        "title": "Manage MCP Servers",
+        "category": "Codie",
+        "description": "Add, edit, or remove MCP/Context7 tool server connections."
       },
       {
         "command": "codie.testFoundryConnection",

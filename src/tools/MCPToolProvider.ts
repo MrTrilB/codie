@@ -2,23 +2,26 @@ import { Tool, ToolProvider, ToolContext } from './ToolInterfaces';
 import { ToolRegistry } from './ToolRegistry';
 
 
-const DEFAULT_MCP_ENDPOINT = 'http://localhost:8080/tools';
+const DEFAULT_MCP_ENDPOINT = 'http://localhost:9090/tools';
+
 
 export class MCPToolProvider implements ToolProvider {
   id = 'mcp';
-  label = 'MCP Tools';
+  label: string;
   private endpoint: string;
   private apiKey: string;
   private tools: Tool[] = [];
 
-  constructor(endpoint?: string, apiKey?: string) {
+  constructor(endpoint?: string, apiKey?: string, label?: string) {
     this.endpoint = endpoint || DEFAULT_MCP_ENDPOINT;
     this.apiKey = apiKey || '';
+    this.label = label || endpoint || 'MCP Tools';
   }
 
-  setConfig({ apiKey, endpoint }: { apiKey?: string; endpoint?: string }) {
+  setConfig({ apiKey, endpoint, label }: { apiKey?: string; endpoint?: string; label?: string }) {
     if (typeof apiKey === 'string') this.apiKey = apiKey;
     if (typeof endpoint === 'string') this.endpoint = endpoint;
+    if (typeof label === 'string') this.label = label;
   }
 
   async fetchTools(): Promise<Tool[]> {
@@ -50,6 +53,7 @@ export class MCPToolProvider implements ToolProvider {
   private makeTool(toolDef: any): Tool {
     const endpoint = this.endpoint;
     const apiKey = this.apiKey;
+    const providerLabel = this.label;
     return {
       id: toolDef.id,
       label: toolDef.label || toolDef.id,
@@ -57,7 +61,7 @@ export class MCPToolProvider implements ToolProvider {
       icon: toolDef.icon || 'plug',
       inputSchema: toolDef.inputSchema || {},
       outputSchema: toolDef.outputSchema || {},
-      provider: 'mcp',
+      provider: providerLabel,
       enabled: true,
       async execute(input: any, context?: ToolContext) {
         try {
