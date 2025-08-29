@@ -1,6 +1,7 @@
 // Minimal Mocha test suite for VS Code extension
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import Mocha from 'mocha';
 
 import { registerFoundryLocalProviderTests } from '../extension/FoundryLocalProvider.test';
 

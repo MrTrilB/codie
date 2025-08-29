@@ -5,7 +5,12 @@ import { FluentProvider, Button, Table, TableBody, TableCell, TableRow, TableHea
 import { makeStyles } from '@griffel/react';
 import { codieLightTheme } from './codieVSCodeTheme';
 
-const defaultServer = { label: '', endpoint: '', apiKey: '' };
+interface McpServer {
+  label: string;
+  endpoint: string;
+  apiKey?: string;
+}
+const defaultServer: McpServer = { label: '', endpoint: '', apiKey: '' };
 
 declare global {
   interface Window {
@@ -15,7 +20,7 @@ declare global {
 }
 
 export const MCPServerManager: React.FC = () => {
-  const _stylesObj: any = {
+  const _stylesObj = {
     container: { padding: '16px' },
     title: { marginTop: 0, marginBottom: '12px' },
     addButton: { marginBottom: '16px' },
@@ -26,12 +31,13 @@ export const MCPServerManager: React.FC = () => {
     saveButton: { marginRight: '8px' },
     deleteDialogButton: { marginRight: '8px', backgroundColor: '#a4262c', color: '#fff' },
     serverLabel: { marginTop: '8px', fontWeight: 600 }
-  };
-  const useStyles = makeStyles(_stylesObj);
+  } as const;
+  const useStyles = makeStyles(_stylesObj as any);
   const styles = useStyles();
-  const [servers, setServers] = useState<any[]>(window.initialMcpServers || []);
+  const initialServers: McpServer[] = (window.initialMcpServers && Array.isArray(window.initialMcpServers)) ? window.initialMcpServers as McpServer[] : [];
+  const [servers, setServers] = useState<McpServer[]>(initialServers);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editServer, setEditServer] = useState<any>(defaultServer);
+  const [editServer, setEditServer] = useState<McpServer>(defaultServer);
   const [showForm, setShowForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);

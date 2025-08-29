@@ -573,6 +573,8 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
             z-index: 1000 !important;
           }
           #root .fui-PopoverSurface[style*="left"] { left: 0 !important; right: auto !important; }
+          /* Ensure the auto-generated wrapper under #root (React/Fluent) fills the available height */
+          #root, #root > div { height: 100% !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; box-sizing: border-box !important; }
         </style>
         <script>window.codieLogoUri = "${codieLogoUri}";</script>
         <title>Codie Chat</title>

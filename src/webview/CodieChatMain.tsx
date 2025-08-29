@@ -4,7 +4,15 @@ import { makeStyles } from '@griffel/react';
 import { CodieChatArea } from './CodieChatArea';
 
 const useStyles = makeStyles({
-  main: { padding: '12px' },
+  main: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: '1 1 0',
+    minHeight: 0,
+    padding: '12px 0',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
 });
 
 export const CodieChatMain: React.FC = () => {
