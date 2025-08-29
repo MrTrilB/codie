@@ -545,16 +545,35 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   const path = require('path');
   const mainScriptUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'main.js')));
   const reactBundleUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'webview.js')));
-  const styleUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'chat.css')));
-  const codiconCssUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'codicon.css')));
+  // Webviews should rely on component-scoped styles (Griffel / Fluent tokens).
+  // Do not inject global `chat.css` into the main chat webview anymore.
   const codieLogoUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'Codie.png')));
     return `
       <!DOCTYPE html>
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="${codiconCssUri}" rel="stylesheet">
-        <link href="${styleUri}" rel="stylesheet">
+        <style>
+          /* Scoped minimal global styles for webview layout and necessary popover overrides. */
+          html, body, #root { height: 100%; margin: 0; padding: 0; }
+          #root { display: flex; flex-direction: column; height: 100%; }
+          :root { --codie-bg: var(--vscode-editor-background, #1e1e1e); --codie-fg: var(--vscode-editor-foreground, #d4d4d4); }
+          body { background: var(--codie-bg); color: var(--codie-fg); }
+          /* Scoped Fluent popover/dropdown fixes under #root only (avoids global leakage) */
+          #root .fui-PopoverSurface[role='listbox']:first-of-type { left: 0 !important; right: auto !important; transform: none !important; }
+          #root .fui-PopoverSurface, #root .fui-Listbox, #root .fui-Listbox__root {
+            background: #23272e !important;
+            color: #fff !important;
+            border: 1px solid #444 !important;
+            box-shadow: 0 2px 12px #0006 !important;
+            border-radius: 6px !important;
+            min-width: 100px !important;
+            max-width: 250px !important;
+            padding: 0.2em 0 !important;
+            z-index: 1000 !important;
+          }
+          #root .fui-PopoverSurface[style*="left"] { left: 0 !important; right: auto !important; }
+        </style>
         <script>window.codieLogoUri = "${codieLogoUri}";</script>
         <title>Codie Chat</title>
       </head>
@@ -665,16 +684,15 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
       const mcpServers = config.get<any[]>('codie.tools.mcp.servers', []);
       // Use only the local, bundled JS for MCP Manager
       const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.js')));
-      const styleUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'chat.css')));
       const mcpStyleUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.css')));
-      panel.webview.html = `
+          // Only include MCP-specific stylesheet for the MCP panel (component styles should be preferred).
+          panel.webview.html = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <link href="${styleUri}" rel="stylesheet">
-          <link href="${mcpStyleUri}" rel="stylesheet">
+              <link href="${mcpStyleUri}" rel="stylesheet">
           <title>Manage MCP Servers</title>
         </head>
         <body>

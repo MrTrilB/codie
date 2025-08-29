@@ -1,9 +1,17 @@
-// CodieChatMain.tsx
+// NOTE: Styling must be managed via Fluent UI / Griffel makeStyles
 import React from 'react';
+import { makeStyles } from '@griffel/react';
 import { CodieChatArea } from './CodieChatArea';
 
-export const CodieChatMain: React.FC = () => (
-  <main className="codie-chat-main">
-    <CodieChatArea />
-  </main>
-);
+const useStyles = makeStyles({
+  main: { padding: '12px' },
+});
+
+export const CodieChatMain: React.FC = () => {
+  const styles = useStyles();
+  return (
+    <main className={styles.main}>
+      <CodieChatArea />
+    </main>
+  );
+};

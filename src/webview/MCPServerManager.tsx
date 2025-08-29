@@ -1,5 +1,8 @@
+// NOTE: All styling in this file must be managed via Fluent UI / Griffel `makeStyles`.
+// NOTE: All icons across webviews should come from Fluent UI Icons only.
 import React, { useState, useEffect } from 'react';
 import { FluentProvider, Button, Table, TableBody, TableCell, TableRow, TableHeader, TableHeaderCell, Input, Dialog, DialogSurface, DialogTitle, DialogBody, DialogActions } from '@fluentui/react-components';
+import { makeStyles } from '@griffel/react';
 import { codieLightTheme } from './codieVSCodeTheme';
 
 const defaultServer = { label: '', endpoint: '', apiKey: '' };
@@ -12,41 +15,68 @@ declare global {
 }
 
 export const MCPServerManager: React.FC = () => {
+  const _stylesObj: any = {
+    container: { padding: '16px' },
+    title: { marginTop: 0, marginBottom: '12px' },
+    addButton: { marginBottom: '16px' },
+    table: { marginBottom: '24px' },
+    label: { display: 'block', marginTop: '8px', marginBottom: '4px', fontWeight: 600 },
+    input: { width: '100%', marginBottom: '8px' },
+    deleteButton: { marginLeft: '8px', color: '#a4262c', borderColor: '#a4262c' },
+    saveButton: { marginRight: '8px' },
+    deleteDialogButton: { marginRight: '8px', backgroundColor: '#a4262c', color: '#fff' },
+    serverLabel: { marginTop: '8px', fontWeight: 600 }
+  };
+  const useStyles = makeStyles(_stylesObj);
+  const styles = useStyles();
   const [servers, setServers] = useState<any[]>(window.initialMcpServers || []);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editServer, setEditServer] = useState<any>(defaultServer);
   const [showForm, setShowForm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const vscode = window.acquireVsCodeApi ? window.acquireVsCodeApi() : undefined;
 
   const startEdit = (index: number) => {
     setEditingIndex(index);
-    setEditServer(servers[index]);
+    setEditServer({ ...(servers[index] || {}) });
     setShowForm(true);
   };
   const startAdd = () => {
     setEditingIndex(null);
-    setEditServer(defaultServer);
+    setEditServer({ ...defaultServer });
     setShowForm(true);
   };
-  const handleChange = (_: any, data: any) => {
-    setEditServer({ ...editServer, [data.name]: data.value });
+  // Fluent Input may not accept a `name` prop in types; use field-specific handler
+  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const value = (e.target && (e.target as HTMLInputElement).value) || '';
+    setEditServer({ ...editServer, [field]: value });
   };
   const handleSave = () => {
     let newServers = servers.slice();
     if (editingIndex === null) {
-      newServers.push(editServer);
+      newServers.push({ ...editServer });
     } else {
-      newServers[editingIndex] = editServer;
+      newServers[editingIndex] = { ...editServer };
     }
     setServers(newServers);
     setShowForm(false);
     setEditingIndex(null);
-    setEditServer(defaultServer);
+    setEditServer({ ...defaultServer });
     if (vscode) vscode.postMessage({ command: 'saveMcpServers', servers: newServers });
   };
   const handleDelete = (index: number) => {
-    let newServers = servers.filter((_, i) => i !== index);
+    // open confirm dialog
+    setConfirmDeleteIndex(index);
+    setShowDeleteConfirm(true);
+  };
+
+  const performDelete = (index: number | null) => {
+    if (index === null) return;
+    const newServers = servers.filter((_, i) => i !== index);
     setServers(newServers);
+    setShowDeleteConfirm(false);
+    setConfirmDeleteIndex(null);
     if (vscode) vscode.postMessage({ command: 'saveMcpServers', servers: newServers });
   };
   useEffect(() => {
@@ -61,10 +91,10 @@ export const MCPServerManager: React.FC = () => {
 
   return (
     <FluentProvider theme={codieLightTheme}>
-      <div className="mcp-container">
-        <h2 className="mcp-title">Manage MCP Servers</h2>
-        <Button appearance="primary" onClick={startAdd} style={{ marginBottom: 16 }}>Add Server</Button>
-        <Table size="medium" style={{ marginBottom: 24 }}>
+      <div className={styles.container}>
+        <h2 className={styles.title}>Manage MCP Servers</h2>
+  <Button appearance="primary" onClick={startAdd} className={styles.addButton}>Add Server</Button>
+  <Table size="medium" className={styles.table}>
           <TableHeader>
             <TableRow>
               <TableHeaderCell>Label</TableHeaderCell>
@@ -81,7 +111,7 @@ export const MCPServerManager: React.FC = () => {
                 <TableCell>{server.apiKey ? '••••••' : ''}</TableCell>
                 <TableCell>
                   <Button size="small" onClick={() => startEdit(i)}>Edit</Button>
-                  <Button size="small" appearance="secondary" onClick={() => handleDelete(i)} style={{ marginLeft: 8 }}>Delete</Button>
+                  <Button size="small" appearance="secondary" onClick={() => handleDelete(i)} className={styles.deleteButton}>Delete</Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -92,36 +122,52 @@ export const MCPServerManager: React.FC = () => {
             <DialogSurface>
               <DialogBody>
                 <DialogTitle>{editingIndex === null ? 'Add MCP Server' : 'Edit MCP Server'}</DialogTitle>
-                <label className="mcp-label">Label</label>
+                <label className={styles.label}>Label</label>
                 <Input
-                  name="label"
                   value={editServer.label}
-                  onChange={handleChange}
-                  className="mcp-input"
+                  onChange={handleChange('label')}
+                  className={styles.input}
                   required
                 />
-                <label className="mcp-label">Endpoint</label>
+                <label className={styles.label}>Endpoint</label>
                 <Input
-                  name="endpoint"
                   value={editServer.endpoint}
-                  onChange={handleChange}
-                  className="mcp-input"
+                  onChange={handleChange('endpoint')}
+                  className={styles.input}
                   required
                 />
-                <label className="mcp-label">API Key</label>
+                <label className={styles.label}>API Key</label>
                 <Input
-                  name="apiKey"
                   value={editServer.apiKey}
-                  onChange={handleChange}
+                  onChange={handleChange('apiKey')}
                   type="password"
                   autoComplete="off"
-                  className="mcp-input"
+                  className={styles.input}
                   required
                 />
               </DialogBody>
               <DialogActions>
-                <Button appearance="primary" onClick={handleSave} style={{ marginRight: 8 }}>Save</Button>
+                <Button appearance="primary" onClick={handleSave} className={styles.saveButton}>Save</Button>
                 <Button onClick={() => setShowForm(false)}>Cancel</Button>
+              </DialogActions>
+            </DialogSurface>
+          </Dialog>
+        )}
+        {showDeleteConfirm && (
+          <Dialog open={showDeleteConfirm}>
+            <DialogSurface>
+              <DialogBody>
+                <DialogTitle>Confirm Delete</DialogTitle>
+                <div>
+                  Are you sure you want to delete this MCP server?
+                  {confirmDeleteIndex !== null && servers[confirmDeleteIndex] && servers[confirmDeleteIndex].label ? (
+                    <div className={styles.serverLabel}>{`Server: ${servers[confirmDeleteIndex].label}`}</div>
+                  ) : null}
+                </div>
+              </DialogBody>
+              <DialogActions>
+                <Button appearance="secondary" onClick={() => performDelete(confirmDeleteIndex)} className={styles.deleteDialogButton}>Delete</Button>
+                <Button onClick={() => { setShowDeleteConfirm(false); setConfirmDeleteIndex(null); }}>Cancel</Button>
               </DialogActions>
             </DialogSurface>
           </Dialog>

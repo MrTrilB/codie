@@ -1,11 +1,19 @@
-// CodieChat.tsx
+// NOTE: Styling must be managed via Fluent UI / Griffel makeStyles
 import React from 'react';
+import { makeStyles } from '@griffel/react';
 import { CodieChatHeader } from './CodieChatHeader';
 import { CodieChatMain } from './CodieChatMain';
 
-export const CodieChat: React.FC = () => (
-  <div className="codie-chat-container">
-    <CodieChatHeader />
-    <CodieChatMain />
-  </div>
-);
+const useStyles = makeStyles({
+  container: { display: 'flex', flexDirection: 'column', height: '100%' },
+});
+
+export const CodieChat: React.FC = () => {
+  const styles = useStyles();
+  return (
+    <div className={styles.container}>
+      <CodieChatHeader />
+      <CodieChatMain />
+    </div>
+  );
+};
