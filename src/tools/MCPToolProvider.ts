@@ -29,12 +29,19 @@ export class MCPToolProvider implements ToolProvider {
       const resp = await fetch(this.endpoint, {
         headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : undefined
       });
-      if (!resp.ok) throw new Error(`Failed to fetch MCP tools: ${resp.status}`);
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        const errMsg = `[MCPToolProvider] Failed to fetch MCP tools: ${resp.status} ${text}`;
+        try { (global as any).codieOutput?.appendLine(errMsg); } catch {}
+        throw new Error(errMsg);
+      }
       const data = await resp.json();
       this.tools = (data || []).map((tool: any) => this.makeTool(tool));
       return this.tools;
-    } catch (err) {
-      console.error('[MCPToolProvider] Error fetching tools:', err);
+    } catch (err: any) {
+      const errMsg = `[MCPToolProvider] Error fetching tools from ${this.endpoint}: ${err?.message || String(err)}`;
+      try { (global as any).codieOutput?.appendLine(errMsg); } catch {}
+      console.error(errMsg);
       return [];
     }
   }
@@ -73,10 +80,17 @@ export class MCPToolProvider implements ToolProvider {
             },
             body: JSON.stringify({ input, context })
           });
-          if (!resp.ok) throw new Error(`MCP tool invoke failed: ${resp.status}`);
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            const msg = `MCP tool invoke failed: ${resp.status} ${text}`;
+            try { (global as any).codieOutput?.appendLine(`[MCPToolProvider] ${msg}`); } catch {}
+            return { success: false, error: msg };
+          }
           return await resp.json();
-        } catch (err) {
-          return { success: false, error: err instanceof Error ? err.message : String(err) };
+        } catch (err: any) {
+          const msg = `MCP tool invoke exception: ${err?.message || String(err)}`;
+          try { (global as any).codieOutput?.appendLine(`[MCPToolProvider] ${msg}`); } catch {}
+          return { success: false, error: msg };
         }
       }
     };

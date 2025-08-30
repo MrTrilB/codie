@@ -58,17 +58,28 @@ export class MCPProvider implements AIProvider {
     };
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
-    if (!resp.ok) {
-      throw new Error(`[MCPProvider] Error from MCP server: ${resp.status} ${resp.statusText}`);
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: options?.signal,
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        const errMsg = `[MCPProvider] Error from MCP server: ${resp.status} ${resp.statusText} ${text}`;
+        // Log to extension output channel if present
+        try { (global as any).codieOutput?.appendLine(errMsg); } catch {}
+        throw new Error(errMsg);
+      }
+      const data = await resp.json();
+      // Assume docs are in data.docs or data.result
+      return data.docs || data.result || JSON.stringify(data);
+    } catch (err: any) {
+      const errStr = err?.message || String(err);
+      const logMsg = `[MCPProvider] Request failed to ${url}: ${errStr}`;
+      try { (global as any).codieOutput?.appendLine(logMsg); } catch {}
+      throw new Error(logMsg);
     }
-    const data = await resp.json();
-    // Assume docs are in data.docs or data.result
-    return data.docs || data.result || JSON.stringify(data);
   }
 }

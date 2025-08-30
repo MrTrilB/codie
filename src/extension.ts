@@ -42,6 +42,16 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
     this.providerRegistry = providerRegistry;
   }
 
+  // Allow extension activation code to send theme updates to this view
+  public sendThemeUpdate(override: string, kind: number) {
+    if (!this._webviewView) return;
+    try {
+      this._webviewView.webview.postMessage({ type: 'codieThemeUpdate', override, kind });
+    } catch (err) {
+      // ignore
+    }
+  }
+
   resolveWebviewView(webviewView: vscode.WebviewView) {
     this._webviewView = webviewView;
     webviewView.webview.options = { enableScripts: true };
@@ -548,7 +558,10 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   // Webviews should rely on component-scoped styles (Griffel / Fluent tokens).
   // Do not inject global `chat.css` into the main chat webview anymore.
   const codieLogoUri = webview.asWebviewUri(vscode.Uri.file(path.join(extensionUri.fsPath, 'media', 'Codie.png')));
-    return `
+  const themeOverride = vscode.workspace.getConfiguration().get('codie.theme.override', 'system');
+  const activeThemeKind = vscode.window.activeColorTheme?.kind ?? 1;
+  const activeThemeLabel = String(vscode.workspace.getConfiguration('workbench').get('colorTheme', '') || '');
+  return `
       <!DOCTYPE html>
       <head>
         <meta charset="UTF-8">
@@ -576,7 +589,7 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
           /* Ensure the auto-generated wrapper under #root (React/Fluent) fills the available height */
           #root, #root > div { height: 100% !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; box-sizing: border-box !important; }
         </style>
-        <script>window.codieLogoUri = "${codieLogoUri}";</script>
+  <script>window.codieLogoUri = "${codieLogoUri}"; window.codieThemeOverride = "${themeOverride}"; window.codieActiveColorTheme = ${JSON.stringify({ kind: activeThemeKind, label: activeThemeLabel })};</script>
         <title>Codie Chat</title>
       </head>
       <body>
@@ -669,6 +682,14 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
 // Top-level export, not inside any class
 export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
+  // Create a shared output channel for Codie to capture runtime errors and network issues
+  try {
+    const out = vscode.window.createOutputChannel('Codie', { log: true });
+    (global as any).codieOutput = out;
+    (global as any).codieOutput.appendLine('Codie output channel initialized.');
+  } catch (e) {
+    // ignore
+  }
   // Register command to open MCP server management webview
   context.subscriptions.push(
     vscode.commands.registerCommand('codie.tools.manageMCPServers', async () => {
@@ -684,17 +705,14 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
       // Send current MCP server list to webview
       const config = vscode.workspace.getConfiguration();
       const mcpServers = config.get<any[]>('codie.tools.mcp.servers', []);
-      // Use only the local, bundled JS for MCP Manager
+      // Use only the local, bundled JS for MCP Manager; styles are component-scoped
       const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.js')));
-      const mcpStyleUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'mcpServerManager.css')));
-          // Only include MCP-specific stylesheet for the MCP panel (component styles should be preferred).
           panel.webview.html = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <link href="${mcpStyleUri}" rel="stylesheet">
           <title>Manage MCP Servers</title>
         </head>
         <body>
@@ -702,6 +720,8 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
           <script>
             window.initialMcpServers = ${JSON.stringify(mcpServers)};
             window.acquireVsCodeApi = acquireVsCodeApi;
+            window.codieThemeOverride = ${JSON.stringify(config.get('codie.theme.override', 'system'))};
+            window.codieActiveColorTheme = ${JSON.stringify({ kind: (vscode.window.activeColorTheme?.kind ?? 1), label: String(vscode.workspace.getConfiguration('workbench').get('colorTheme', '') || '') })};
           </script>
           <script src="${scriptUri}"></script>
         </body>
@@ -782,6 +802,44 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
   }
   // Make all MCP providers globally accessible for message handlers (array)
   (global as any).codieMcpProviders = mcpProviders;
+
+  // Attempt to repair malformed user toolsets JSONC files that may cause parse errors.
+  async function repairUserToolsets(): Promise<void> {
+    try {
+      const appData = process.env.APPDATA || process.env.LOCALAPPDATA || undefined;
+      if (!appData) return;
+      const promptsDir = path.join(appData, 'Code', 'User', 'prompts');
+      const fs = await import('fs');
+      if (!fs.existsSync(promptsDir)) return;
+      const files = fs.readdirSync(promptsDir).filter(f => f.endsWith('.toolsets.jsonc'));
+      for (const file of files) {
+        const fp = path.join(promptsDir, file);
+        try {
+          const raw = fs.readFileSync(fp, 'utf8');
+          // Quick heuristic: try to strip trailing commas and repair simple truncation
+          let repaired = raw.replace(/,\s*([}\]])/g, '$1');
+          // If file ends abruptly without closing brace, append closing braces
+          if (repaired.trim().endsWith(',')) repaired = repaired.trim().slice(0, -1);
+          if (!repaired.trim().endsWith('}')) repaired = repaired + '\n}';
+          // Validate JSONC by removing line comments then JSON.parse
+          const withoutComments = repaired.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+          JSON.parse(withoutComments);
+          if (withoutComments !== raw) {
+            const backup = fp + '.bak';
+            fs.copyFileSync(fp, backup);
+            fs.writeFileSync(fp, repaired, 'utf8');
+            try { (global as any).codieOutput?.appendLine(`Repaired toolsets file: ${fp} (backup: ${backup})`); } catch {}
+          }
+        } catch (err) {
+          try { (global as any).codieOutput?.appendLine(`Failed to repair toolsets file: ${fp}: ${(err as any)?.message || err}`); } catch {}
+        }
+      }
+    } catch (e) {
+      try { (global as any).codieOutput?.appendLine(`Toolsets repair failed: ${(e as any)?.message || e}`); } catch {}
+    }
+  }
+  // Fire-and-forget repair on activation
+  repairUserToolsets().catch(() => {});
 
   // Command to refresh all MCP tools
   context.subscriptions.push(

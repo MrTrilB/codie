@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, Button, Checkbox, Label, Input, Divider, makeStyles } from '@fluentui/react-components';
+import { Button, Checkbox, Label, Input, Divider, makeStyles, Dialog, DialogTrigger, DialogSurface, DialogActions } from '@fluentui/react-components';
 const useStyles = makeStyles({
   scrollArea: {
     maxHeight: '350px',
@@ -25,6 +25,10 @@ const useStyles = makeStyles({
     columnGap: '8px',
     marginTop: '16px',
   },
+  modalBackdrop: { position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', zIndex: 1000 },
+  modal: { background: '#fff', color: '#000', borderRadius: '6px', padding: '16px', width: 'min(720px, 92%)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' },
+  modalTitle: { margin: 0, marginBottom: '12px' },
+  modalActions: { display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }
 });
 
 export interface ToolManagementModalProps {
@@ -36,11 +40,12 @@ export interface ToolManagementModalProps {
 
 export const ToolManagementModal: React.FC<ToolManagementModalProps> = ({ open, tools, onClose, onToggleTool }) => {
   const styles = useStyles();
+  // Use controlled Dialog so focus and button events behave correctly
   return (
-    <Dialog open={open} onOpenChange={(_, d) => { if (!d.open) onClose(); }}>
-      <DialogTitle>Manage Tools</DialogTitle>
-      <DialogContent>
-  <div className={styles.scrollArea}>
+    <Dialog open={open} onOpenChange={(e, data) => { if (!data.open) onClose(); }}>
+      <DialogSurface className={styles.modal}>
+        <h3 className={styles.modalTitle}>Manage Tools</h3>
+        <div className={styles.scrollArea}>
           {tools.length === 0 && <div>No tools available.</div>}
           {tools.map(tool => (
             <div key={tool.id} className={styles.toolRow}>
@@ -53,11 +58,10 @@ export const ToolManagementModal: React.FC<ToolManagementModalProps> = ({ open, 
             </div>
           ))}
         </div>
-  {/* MCP/Context7 Settings button removed */}
-        <div className={styles.actions}>
+        <DialogActions>
           <Button appearance="primary" onClick={onClose}>Close</Button>
-        </div>
-      </DialogContent>
+        </DialogActions>
+      </DialogSurface>
     </Dialog>
   );
 };

@@ -118,11 +118,13 @@
                   "description": "Optional label for this MCP server connection."
                 }
               },
-              "required": ["endpoint", "apiKey"]
+              "required": [
+                "endpoint",
+                "apiKey"
+              ]
             },
             "scope": "window"
           },
-
           "codie.tools.changes.enabled": {
             "type": "boolean",
             "default": true,
@@ -274,6 +276,19 @@
           }
         }
       }
+      ,
+      {
+        "title": "Appearance",
+        "properties": {
+          "codie.theme.override": {
+            "type": "string",
+            "enum": ["system", "light", "dark"],
+            "default": "system",
+            "description": "Override Codie webview theme. 'system' follows the user's OS/VSC theme, 'light' forces a light theme, 'dark' forces a dark theme.",
+            "scope": "window"
+          }
+        }
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -335,7 +350,7 @@
     "@types/vscode": "^1.103.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "2.3.0",
+    "@vscode/test-electron": "^2.3.0",
     "eslint": "^9.32.0",
     "mocha": "^10.2.0",
     "react-syntax-highlighter": "^15.5.0",
@@ -351,7 +366,7 @@
     "build:webview": "webpack --config webpack.webview.config.js --mode production",
     "watch": "npx tsc --watch --preserveWatchOutput",
     "watch-tests": "mocha --require ts-node/register --watch \"test/**/*.ts\" --ignore \"context/**\"",
-    "test": "vscode-test run --extensionDevelopmentPath=. --extensionTestsPath=./test/index",
+  "test": "node ./node_modules/@vscode/test-electron/out/runTest.js --extensionDevelopmentPath=. --extensionTestsPath=./test/index",
     "test:memory": "mocha --require ts-node/register --timeout 10000 \"test/standalone-memory/*.test.ts\" --no-parallel"
   },
   "dependencies": {

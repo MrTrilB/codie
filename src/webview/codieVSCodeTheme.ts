@@ -32,4 +32,21 @@ export const codieDarkTheme: Theme = {
 };
 
 // Default export: use light theme for now
+export type ThemeName = 'light' | 'dark' | 'system';
+
+export function getCodieTheme(name: ThemeName): Theme {
+  if (name === 'dark') return codieDarkTheme;
+  return codieLightTheme;
+}
+
+// Keep codieLightTheme as the canonical light theme export and provide an alias
 export const codieVSCodeTheme = codieLightTheme;
+
+// Return a fresh reference to the light theme. Prefer callers to use `getCodieTheme('light')` but
+// provide this convenience getter for compatibility with older imports.
+export function getCodieLightTheme(): Theme {
+  return getCodieTheme('light');
+}
+
+// Compatibility export: some files imported the light theme directly.
+export const codieLightThemeLegacy = codieLightTheme;
