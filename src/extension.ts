@@ -8,9 +8,13 @@ import type { ToolProvider as CodieToolProvider, Tool as CodieTool } from './too
 export interface CodieExtensionAPI {
   registerToolProvider(provider: CodieToolProvider): void;
   registerTool(tool: CodieTool): void;
+  registerMcpServer?(server: { endpoint: string; apiKey?: string; label?: string }): void;
+  unregisterMcpServer?(endpoint: string): void;
 }
 
 import * as codieMemory from './codie-memory';
+
+import { withCodieServices } from './services/getCodieServices';
 class CodieChatViewProvider implements vscode.WebviewViewProvider {
   // Use file-based persistent memory for workspace-wide context
   private async getLastFileOpIntent(): Promise<boolean> {
@@ -39,11 +43,15 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   constructor(private readonly context: vscode.ExtensionContext, providerRegistry: ProviderRegistry) {
-    this.providerRegistry = providerRegistry;
+  this.providerRegistry = providerRegistry;
+  // Register provider registry with services for DI-based notifications
+  // Use Promise-based dynamic import to avoid top-level await in constructor
+  withCodieServices(mod => { try { mod.codieServices.setProviderRegistry(providerRegistry); } catch {} });
   }
 
   // Allow extension activation code to send theme updates to this view
   public sendThemeUpdate(override: string, kind: number) {
+    // no-op
     if (!this._webviewView) return;
     try {
       this._webviewView.webview.postMessage({ type: 'codieThemeUpdate', override, kind });
@@ -217,14 +225,23 @@ class CodieChatViewProvider implements vscode.WebviewViewProvider {
           // Save MCP API key and endpoint to config, update MCPToolProvider
           const { apiKey, endpoint } = msg;
           const mcpConfig = vscode.workspace.getConfiguration();
-          await mcpConfig.update('codie.mcp.apiKey', apiKey, vscode.ConfigurationTarget.Global);
-          await mcpConfig.update('codie.mcp.endpoint', endpoint, vscode.ConfigurationTarget.Global);
-          // Update MCPToolProvider instance if available
-          const globalMcpProvider = (global as any).codieMcpProvider;
-          if (globalMcpProvider) {
-            globalMcpProvider.setConfig({ apiKey, endpoint });
-            await globalMcpProvider.refresh();
-          }
+            await mcpConfig.update('codie.mcp.apiKey', apiKey, vscode.ConfigurationTarget.Global);
+            await mcpConfig.update('codie.mcp.endpoint', endpoint, vscode.ConfigurationTarget.Global);
+            // Update MCPToolProvider instance(s) if available via codieServices
+            try {
+              withCodieServices(async (mod) => {
+                try {
+                  const arr = mod.codieServices.mcpProviders || [];
+                  const globalMcpProvider = arr.length > 0 ? arr[0] : undefined;
+                  if (globalMcpProvider) {
+                    try { if (typeof globalMcpProvider.setConfig === 'function') globalMcpProvider.setConfig({ apiKey, endpoint }); } catch {}
+                    try { if (typeof globalMcpProvider.refresh === 'function') await globalMcpProvider.refresh(); } catch {}
+                  }
+                } catch (e) {}
+              });
+            } catch (e) {
+              // ignore
+            }
           webviewView.webview.postMessage({ command: 'mcpSettings', apiKey, endpoint });
           break;
         }
@@ -613,6 +630,7 @@ import { LMStudioProvider } from './providers/LMStudioProvider';
 
 import { OllamaProvider } from './providers/OllamaProvider';
 import * as vscode from 'vscode';
+import * as mcpCommands from './commands/mcpCommands';
 
 // CONTINUE/CANCEL STATE (module scope for CodieChatViewProvider)
 let lastProviderName: string | undefined = undefined;
@@ -681,12 +699,11 @@ class CodieDataProvider implements vscode.TreeDataProvider<CodieTreeItem> {
 
 
 // Top-level export, not inside any class
-export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
+export async function activate(context: vscode.ExtensionContext): Promise<CodieExtensionAPI> {
   // Create a shared output channel for Codie to capture runtime errors and network issues
   try {
     const out = vscode.window.createOutputChannel('Codie', { log: true });
-    (global as any).codieOutput = out;
-    (global as any).codieOutput.appendLine('Codie output channel initialized.');
+  withCodieServices(mod => { try { mod.codieServices.setOutput(out); mod.codieServices.log('Codie output channel initialized.'); } catch {} });
   } catch (e) {
     // ignore
   }
@@ -728,19 +745,23 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
         </html>
       `;
       // Handle messages from the webview (save/update MCP servers)
-      panel.webview.onDidReceiveMessage(async (msg) => {
+    panel.webview.onDidReceiveMessage(async (msg) => {
         if (msg && msg.command === 'saveMcpServers' && Array.isArray(msg.servers)) {
           await config.update('codie.tools.mcp.servers', msg.servers, vscode.ConfigurationTarget.Global);
           vscode.window.showInformationMessage('MCP server list updated.');
           // Reload MCPToolProviders
           // Remove all previous MCPToolProviders from ToolRegistry
-          if ((global as any).codieMcpProviders) {
-            for (const provider of (global as any).codieMcpProviders) {
-              ToolRegistry.unregisterProvider?.(provider); // If unregisterProvider exists
-            }
-          }
+          try {
+            withCodieServices(mod => {
+              try {
+                for (const provider of mod.codieServices.mcpProviders || []) {
+                  try { ToolRegistry.unregisterProvider?.(provider); } catch {}
+                }
+              } catch {}
+            });
+          } catch (e) {}
           // Register new providers
-          const newProviders = [];
+          const newProviders: MCPToolProvider[] = [];
           for (const server of msg.servers) {
             if (!server || !server.endpoint) continue;
             const provider = new MCPToolProvider(server.endpoint, server.apiKey, server.label);
@@ -748,7 +769,7 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
             provider.refresh();
             newProviders.push(provider);
           }
-          (global as any).codieMcpProviders = newProviders;
+          try { withCodieServices(mod => { try { mod.codieServices.setMcpProviders(newProviders); } catch {} }); } catch (e) {}
           // Send updated list back to webview
           panel.webview.postMessage({ command: 'updateMcpServers', servers: msg.servers });
         }
@@ -800,8 +821,15 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
     provider.refresh();
     mcpProviders.push(provider);
   }
-  // Make all MCP providers globally accessible for message handlers (array)
-  (global as any).codieMcpProviders = mcpProviders;
+  try { withCodieServices(mod => { try { mod.codieServices.setMcpProviders(mcpProviders); } catch {} }); } catch (e) {}
+
+  // Register MCP-related commands (discovery, sampling, roots, elicitation)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codie.mcp.discover', async () => { await mcpCommands.discoverCommand(); }),
+    vscode.commands.registerCommand('codie.mcp.sample', async () => { await mcpCommands.sampleCommand(); }),
+    vscode.commands.registerCommand('codie.mcp.listRoots', async () => { await mcpCommands.listRootsCommand(); }),
+    vscode.commands.registerCommand('codie.mcp.elicit', async () => { await mcpCommands.elicitCommand(); })
+  );
 
   // Attempt to repair malformed user toolsets JSONC files that may cause parse errors.
   async function repairUserToolsets(): Promise<void> {
@@ -824,18 +852,18 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
           // Validate JSONC by removing line comments then JSON.parse
           const withoutComments = repaired.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
           JSON.parse(withoutComments);
-          if (withoutComments !== raw) {
+            if (withoutComments !== raw) {
             const backup = fp + '.bak';
             fs.copyFileSync(fp, backup);
             fs.writeFileSync(fp, repaired, 'utf8');
-            try { (global as any).codieOutput?.appendLine(`Repaired toolsets file: ${fp} (backup: ${backup})`); } catch {}
+            try { withCodieServices(mod => { try { mod.codieServices.log(`Repaired toolsets file: ${fp} (backup: ${backup})`); } catch {} }); } catch {}
           }
         } catch (err) {
-          try { (global as any).codieOutput?.appendLine(`Failed to repair toolsets file: ${fp}: ${(err as any)?.message || err}`); } catch {}
+          try { withCodieServices(mod => { try { mod.codieServices.log(`Failed to repair toolsets file: ${fp}: ${(err as any)?.message || err}`); } catch {} }); } catch {}
         }
       }
     } catch (e) {
-      try { (global as any).codieOutput?.appendLine(`Toolsets repair failed: ${(e as any)?.message || e}`); } catch {}
+  try { withCodieServices(mod => { try { mod.codieServices.log(`Toolsets repair failed: ${(e as any)?.message || e}`); } catch {} }); } catch {}
     }
   }
   // Fire-and-forget repair on activation
@@ -857,6 +885,48 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
     },
     registerTool(tool: CodieTool) {
       ToolRegistry.registerTool(tool);
+    }
+  };
+
+  // Extend API to allow other extensions to register/unregister MCP servers programmatically
+  // Use helper for testability
+  let registerMcpServerHelper: any;
+  let unregisterMcpServerHelper: any;
+  import('./tools/mcpRegistration').then(mod => {
+    registerMcpServerHelper = mod.registerMcpServerHelper;
+    unregisterMcpServerHelper = mod.unregisterMcpServerHelper;
+  }).catch(() => {});
+  api.registerMcpServer = async (server: { endpoint: string; apiKey?: string; label?: string }) => {
+    if (!server || !server.endpoint) return;
+    const cfg = vscode.workspace.getConfiguration();
+    const current = cfg.get<any[]>('codie.tools.mcp.servers', []) || [];
+      await registerMcpServerHelper(current, (s: any) => Promise.resolve(cfg.update('codie.tools.mcp.servers', s, vscode.ConfigurationTarget.Global)), server, (s: any) => {
+      const provider = new MCPToolProvider(s.endpoint, s.apiKey, s.label);
+      ToolRegistry.registerProvider(provider);
+      provider.refresh();
+  try { withCodieServices(mod => { try { const arr = mod.codieServices.mcpProviders || []; arr.push(provider); mod.codieServices.setMcpProviders(arr); } catch {} }); } catch (e) {}
+      return provider;
+    }, (p: any) => {
+  try { withCodieServices(mod => { try { const arr = mod.codieServices.mcpProviders || []; arr.push(p); mod.codieServices.setMcpProviders(arr); } catch {} }); } catch (e) {}
+    });
+  };
+
+  api.unregisterMcpServer = async (endpoint: string) => {
+    if (!endpoint) return;
+    const cfg = vscode.workspace.getConfiguration();
+    const current = cfg.get<any[]>('codie.tools.mcp.servers', []) || [];
+    try {
+      await withCodieServices(async (mod) => {
+        try {
+          const arr: any[] = mod.codieServices.mcpProviders || [];
+          const out = await unregisterMcpServerHelper(current, (s: any) => Promise.resolve(cfg.update('codie.tools.mcp.servers', s, vscode.ConfigurationTarget.Global)), endpoint, arr, (p: any) => {
+            try { if (typeof p.dispose === 'function') p.dispose(); } catch {}
+          }, (provider: any) => { try { ToolRegistry.unregisterProvider?.(provider); } catch {} });
+          try { mod.codieServices.setMcpProviders(out || []); } catch (e) {}
+        } catch (e) {}
+      });
+    } catch (e) {
+      // ignore
     }
   };
   // Register built-in tools (editFiles, etc.)
@@ -1018,6 +1088,11 @@ export function activate(context: vscode.ExtensionContext): CodieExtensionAPI {
   );
   // Backend: Provider registry and dynamic provider loading
   const providerRegistry = new ProviderRegistry();
+  // Ensure provider registry knows about any MCP providers created earlier
+  try {
+    const normalized = (mcpProviders || []).map((p: any) => ({ id: p.id || p.endpoint || p.label || JSON.stringify(p), label: p.label || p.endpoint || 'mcp', client: p.client || p }));
+    try { providerRegistry.setMcpClients(normalized); } catch (e) { /* ignore */ }
+  } catch (e) {}
 
 
   // Debug: Log provider config values

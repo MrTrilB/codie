@@ -81,5 +81,47 @@ export function registerFoundryLocalProviderTests(parentSuite: Mocha.Suite) {
     assert.strictEqual(reply, 'Echo: hello');
   }));
 
+  suite.addTest(new Mocha.Test('should include MCP metadata in system prompt when available', async function () {
+    // Prepare provider and stub OpenAI
+    const captured: any = { messages: null };
+    (provider as any)['openai'] = {
+      chat: {
+        completions: {
+          create: async ({ model, messages }: { model: string, messages: any[] }) => {
+            captured.messages = messages;
+            return { choices: [{ message: { content: `Echo: ${messages.find(m=>m.role==='user')?.content}` } }] };
+          }
+        }
+      }
+    };
+
+    // Inject MCP client metadata via setMcpClients
+    const mockMcpClient = {
+      id: 'mcp1',
+      label: 'TestMCP',
+      client: {
+        listTools: async () => [ { id: 't1', name: 'tool-one' }, { id: 't2', name: 'tool-two' } ]
+      }
+    };
+    // Call the provider hook
+    if (typeof (provider as any).setMcpClients === 'function') {
+      (provider as any).setMcpClients([mockMcpClient]);
+      // Wait a tick for any async prefetch to complete
+      await new Promise(r => setTimeout(r, 10));
+    }
+
+    const chatHistory = [
+      { role: 'system', content: 'system-instructions' },
+      { role: 'user', content: 'hello' }
+    ];
+    const reply = await provider.sendMessage('m1', chatHistory);
+    assert.strictEqual(reply, 'Echo: hello');
+    // Verify the system message sent to OpenAI contains MCP metadata summary
+    assert.ok(captured.messages, 'OpenAI was not called');
+    const sys = captured.messages.find((m: any) => m.role === 'system');
+    assert.ok(sys.content.includes('MCP Metadata'), 'System prompt was not enriched with MCP metadata');
+    assert.ok(sys.content.includes('mcp1 provides tools'), 'MCP tools summary missing');
+  }));
+
   // Additional tests for error handling, edge cases, and integration with Foundry Local SDK can be added here.
 }

@@ -1,22 +1,35 @@
-export function closeMemory() {
-  if (vectorStore) {
-  vectorStore.closeDB();
-    vectorStore = null;
-  }
-  if (db) {
-    db.close();
-    db = null;
-  }
-}
-
 import path from 'path';
 import { SQLiteVectorStore } from './tools/SQLiteVectorStore';
-import Database from 'better-sqlite3';
+import { runtimeRequire } from './utils/runtimeRequire';
+import { withCodieServices } from './services/getCodieServices';
+
+// Load better-sqlite3 at runtime to avoid bundling native binary into webpack build
+let Database: any = null;
+function requireBetterSqlite3() {
+    if (!Database) {
+    Database = runtimeRequire(['better-sqlite3'], { logName: 'better-sqlite3' });
+    if (!Database) {
+  try { withCodieServices((mod: any) => { try { mod.codieServices.log('[codie-memory] better-sqlite3 not available; memory persistence will be unavailable.'); } catch {} }); } catch {}
+    }
+  }
+  return Database;
+}
 
 let DB_PATH = path.join(__dirname, '../codie-memory.sqlite');
 let VECTOR_DIM = 1; // Dummy dimension for now (no real embedding)
 let vectorStore: SQLiteVectorStore | null = null;
-let db: Database.Database | null = null;
+let db: any = null;
+
+export function closeMemory() {
+  if (vectorStore) {
+    try { vectorStore.closeDB(); } catch {}
+    vectorStore = null;
+  }
+  if (db) {
+    try { db.close(); } catch {}
+    db = null;
+  }
+}
 
 export function setMemoryFilePath(filePath: string) {
   DB_PATH = filePath;
@@ -24,9 +37,11 @@ export function setMemoryFilePath(filePath: string) {
   db = null;
 }
 
-function getDb(): Database.Database {
+function getDb(): any {
   if (!db) {
-    db = new Database(DB_PATH);
+    const DB = requireBetterSqlite3();
+    if (!DB) throw new Error('better-sqlite3 not available');
+    db = new DB(DB_PATH);
     db.exec(`CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT

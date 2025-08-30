@@ -1,4 +1,5 @@
-import { AIProvider, AIModelInfo } from './AIProvider';
+import { AIProvider, AIModelInfo, NormalizedMcpClient } from './AIProvider';
+import { withCodieServices } from '../services/getCodieServices';
 
 /**
  * MCPProvider integrates Context7 MCP server as a Codie provider.
@@ -9,6 +10,14 @@ export class MCPProvider implements AIProvider {
   private endpoint: string;
   private apiKey?: string;
   private activeLibraryId: string | null = null;
+  private mcpClients: Array<NormalizedMcpClient> = [];
+
+  setMcpClients?(clients: Array<{ id: string; label: string; client: any }>): void {
+    try {
+      this.mcpClients = clients || [];
+      // Could use clients for dynamic discovery in future
+    } catch (e) {}
+  }
 
   constructor(endpoint: string = 'http://localhost:3000', apiKey?: string) {
     this.endpoint = endpoint;
@@ -65,20 +74,20 @@ export class MCPProvider implements AIProvider {
         body: JSON.stringify(body),
         signal: options?.signal,
       });
-      if (!resp.ok) {
+        if (!resp.ok) {
         const text = await resp.text().catch(() => '');
         const errMsg = `[MCPProvider] Error from MCP server: ${resp.status} ${resp.statusText} ${text}`;
-        // Log to extension output channel if present
-        try { (global as any).codieOutput?.appendLine(errMsg); } catch {}
+          // Log to extension output channel if present
+          try { withCodieServices((m: any) => { try { m.codieServices.log(errMsg); } catch {} }); } catch {}
         throw new Error(errMsg);
       }
       const data = await resp.json();
       // Assume docs are in data.docs or data.result
       return data.docs || data.result || JSON.stringify(data);
     } catch (err: any) {
-      const errStr = err?.message || String(err);
-      const logMsg = `[MCPProvider] Request failed to ${url}: ${errStr}`;
-      try { (global as any).codieOutput?.appendLine(logMsg); } catch {}
+  const errStr = err?.message || String(err);
+  const logMsg = `[MCPProvider] Request failed to ${url}: ${errStr}`;
+  try { withCodieServices((m: any) => { try { m.codieServices.log(logMsg); } catch {} }); } catch {}
       throw new Error(logMsg);
     }
   }

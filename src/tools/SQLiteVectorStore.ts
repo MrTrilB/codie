@@ -1,7 +1,19 @@
 // (stray top-level closeDB removed)
 // SQLiteVectorStore.ts
 // Local, cross-platform vector store for Codie using SQLite (with fallback to brute-force search)
-import Database from 'better-sqlite3';
+import { runtimeRequire } from '../utils/runtimeRequire';
+import { withCodieServices } from '../services/getCodieServices';
+// Load better-sqlite3 at runtime (prevent webpack from bundling native binary)
+let Database: any = null;
+function requireBetterSqlite3() {
+    if (!Database) {
+    Database = runtimeRequire(['better-sqlite3'], { logName: 'better-sqlite3' });
+    if (!Database) {
+  try { withCodieServices((mod: any) => { try { mod.codieServices.log('[SQLiteVectorStore] better-sqlite3 not available; vector store will be disabled.'); } catch {} }); } catch {}
+    }
+  }
+  return Database;
+}
 import path from 'path';
 import fs from 'fs';
 import { VectorStoreAdapter, VectorMetadata, VectorSearchResult, VectorGetResult } from './VectorStoreAdapter';
@@ -17,13 +29,15 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 export class SQLiteVectorStore implements VectorStoreAdapter {
-  private db: Database.Database;
+  private db: any;
   private dim: number;
 
   constructor(dbPath: string, dim: number) {
     this.dim = dim;
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    this.db = new Database(dbPath);
+    const DB = requireBetterSqlite3();
+    if (!DB) throw new Error('better-sqlite3 not available');
+    this.db = new DB(dbPath);
     this.db.exec(`CREATE TABLE IF NOT EXISTS vectors (
       id TEXT PRIMARY KEY,
       vector BLOB NOT NULL,

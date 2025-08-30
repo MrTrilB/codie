@@ -1,5 +1,6 @@
 
-import { AIProvider, AIModelInfo } from './AIProvider';
+import { AIProvider, AIModelInfo, NormalizedMcpClient } from './AIProvider';
+import { enrichSystemMessage } from './mcpEnrichment';
 import { LMStudioClient } from '@lmstudio/sdk';
 
 import * as vscode from 'vscode';
@@ -11,6 +12,9 @@ export class LMStudioProvider implements AIProvider {
   private activeModel: any = null;
   private activeModelId: string | null = null;
   private client: LMStudioClient;
+  // MCP clients injected by ProviderRegistry
+  private mcpClients: Array<NormalizedMcpClient> = [];
+  private mcpMetadata: any = {};
   private endpoint: string;
 
   constructor(endpoint?: string) {
@@ -132,10 +136,12 @@ export class LMStudioProvider implements AIProvider {
       }
       // Use LM Studio's Chat object for multi-turn chat
       const { Chat } = await import('@lmstudio/sdk');
-      // Ensure roles are typed as 'system' | 'user' | 'assistant'
+      // Enrich system message with MCP metadata (non-destructive)
+      const sys = messages.find(m => m.role === 'system');
+      const enriched = enrichSystemMessage(sys?.content, this.mcpMetadata);
       const chatMessages = messages.map(m => ({
         role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content
+        content: m.role === 'system' && enriched ? enriched : m.content
       }));
       const chat = Chat.from(chatMessages);
       // Read maxTokens from VS Code config
@@ -163,5 +169,20 @@ export class LMStudioProvider implements AIProvider {
     } finally {
       if (options?.signal) options.signal.removeEventListener('abort', abortHandler);
     }
+  }
+
+  setMcpClients?(clients: Array<NormalizedMcpClient>): void {
+    try {
+      this.mcpClients = clients || [];
+      for (const c of this.mcpClients) {
+        try {
+          const client = c.client;
+          if (!client) continue;
+          if (typeof client.listTools === 'function') {
+            client.listTools().then((tools: any) => { this.mcpMetadata[c.id] = { tools }; }).catch(() => {});
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
   }
 }

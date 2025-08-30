@@ -5,6 +5,18 @@ export interface AIModelInfo {
   [key: string]: any;
 }
 
+/**
+ * Normalized MCP client shape provided by the extension to AI providers.
+ * - `id`: unique identifier for the MCP provider instance
+ * - `label`: human-friendly label
+ * - `client`: the underlying MCP client object (SDK or HTTP wrapper)
+ */
+export interface NormalizedMcpClient {
+  id: string;
+  label?: string;
+  client: any;
+}
+
 export interface AIProvider {
   getName(): string;
   listModels(): Promise<AIModelInfo[]>;
@@ -23,4 +35,10 @@ export interface AIProvider {
    * Optionally load or set the active model for the provider. No-op for providers that specify model per request.
    */
   setActiveModel(modelId: string): Promise<void>;
+  /**
+   * Optional hook invoked by ProviderRegistry to inject available MCP clients/providers
+   * so AI providers can access MCP servers and the types they expose.
+   * The injected clients will be an array of `NormalizedMcpClient`.
+   */
+  setMcpClients?(clients: Array<NormalizedMcpClient>): void;
 }

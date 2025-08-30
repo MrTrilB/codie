@@ -1,4 +1,5 @@
-import { AIProvider, AIModelInfo } from './AIProvider';
+import { AIProvider, AIModelInfo, NormalizedMcpClient } from './AIProvider';
+import { enrichSystemMessage } from './mcpEnrichment';
 import ollama, { Ollama } from 'ollama';
 
 import * as vscode from 'vscode';
@@ -10,6 +11,9 @@ export class OllamaProvider implements AIProvider {
   private host: string;
   private activeModelId: string | null = null;
   private keepAlive: number = 300; // default 5 min
+  // MCP clients injected by ProviderRegistry
+  private mcpClients: Array<NormalizedMcpClient> = [];
+  private mcpMetadata: any = {};
 
   async setActiveModel(modelId: string, opts?: { keepAlive?: number }): Promise<void> {
     // Store modelId and keepAlive for use in sendMessage
@@ -88,10 +92,15 @@ export class OllamaProvider implements AIProvider {
       // Read maxTokens from VS Code config
       const config = vscode.workspace.getConfiguration();
       const maxTokens = config.get<number>('codie.providers.ollama.maxTokens', 1024);
+
+      // Enrich system message with MCP metadata (non-destructive)
+      const sys = messages.find(m => m.role === 'system');
+      const enriched = enrichSystemMessage(sys?.content, this.mcpMetadata);
+
       // Add num_predict to the options of the last user message
       const messagesWithOptions = messages.map((msg, idx) =>
         idx === messages.length - 1 && msg.role === 'user' ? { ...msg, options: { num_predict: maxTokens } } : msg
-      );
+      ).map(m => m.role === 'system' && enriched ? { role: 'system', content: enriched } : m);
       const responsePromise = this.client.chat({
         model: modelId,
         messages: messagesWithOptions,
@@ -118,5 +127,20 @@ export class OllamaProvider implements AIProvider {
     } finally {
       if (options?.signal) options.signal.removeEventListener('abort', abortHandler);
     }
+  }
+
+  setMcpClients?(clients: Array<NormalizedMcpClient>): void {
+    try {
+      this.mcpClients = clients || [];
+      for (const c of this.mcpClients) {
+        try {
+          const client = c.client;
+          if (!client) continue;
+          if (typeof client.listTools === 'function') {
+            client.listTools().then((tools: any) => { this.mcpMetadata[c.id] = { tools }; }).catch(() => {});
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
   }
 }

@@ -3,7 +3,8 @@ import { FoundryLocalManager } from 'foundry-local-sdk';
 import { OpenAI } from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-import { AIProvider, AIModelInfo } from './AIProvider';
+import { AIProvider, AIModelInfo, NormalizedMcpClient } from './AIProvider';
+import { enrichSystemMessage } from './mcpEnrichment';
 import * as vscode from 'vscode';
 
 export class FoundryLocalProvider implements AIProvider {
@@ -13,6 +14,9 @@ export class FoundryLocalProvider implements AIProvider {
   private endpoint: string | undefined;
   private apiKey: string | undefined;
   private modelInfo: any | null = null;
+  // MCP clients injected by ProviderRegistry
+  private mcpClients: Array<NormalizedMcpClient> = [];
+  private mcpMetadata: any = {};
 
   /**
    * Construct the provider. Optionally pass endpoint for testability/configuration.
@@ -160,10 +164,12 @@ export class FoundryLocalProvider implements AIProvider {
       // Read maxTokens from VS Code config
       const config = vscode.workspace.getConfiguration();
       const maxTokens = config.get<number>('codie.providers.foundry.maxTokens', 1024);
-      // Cast messages to ChatCompletionMessageParam[] to satisfy OpenAI type requirements
+      // Enrich system message with MCP metadata (non-destructive)
+      const sys = messages.find(m => m.role === 'system');
+      const enriched = enrichSystemMessage(sys?.content, this.mcpMetadata);
       const chatMessages = messages.map(m => ({
         role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content
+        content: m.role === 'system' && enriched ? enriched : m.content
       })) as ChatCompletionMessageParam[];
       try {
         const completion = await this.openai.chat.completions.create({
@@ -199,6 +205,29 @@ export class FoundryLocalProvider implements AIProvider {
         console.error(msg);
         throw new Error(msg);
       }
+    }
+  }
+
+  setMcpClients?(clients: Array<NormalizedMcpClient>): void {
+    try {
+      this.mcpClients = clients || [];
+      // Try to prefetch light metadata from each client if available (non-blocking)
+      for (const c of this.mcpClients) {
+        try {
+          const client = c.client;
+          if (!client) continue;
+          // Attempt common method names safely
+          if (typeof client.listTools === 'function') {
+            client.listTools().then((tools: any) => { this.mcpMetadata[c.id] = { tools }; }).catch(() => {});
+          } else if (typeof client.listResources === 'function') {
+            client.listResources().then((res: any) => { this.mcpMetadata[c.id] = { resources: res }; }).catch(() => {});
+          }
+        } catch (e) {
+          // ignore per-client errors
+        }
+      }
+    } catch (e) {
+      // ignore
     }
   }
 }

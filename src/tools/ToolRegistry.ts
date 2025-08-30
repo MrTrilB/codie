@@ -4,6 +4,8 @@ import { Tool, ToolProvider, ToolContext } from './ToolInterfaces';
 export class ToolRegistry {
 	private static tools: Map<string, Tool> = new Map();
 	private static providers: Map<string, ToolProvider> = new Map();
+	// Map provider id -> set of tool ids registered on behalf of that provider
+	private static providerTools: Map<string, Set<string>> = new Map();
 
 	static registerTool(tool: Tool): void {
 		this.tools.set(tool.id, tool);
@@ -29,14 +31,25 @@ export class ToolRegistry {
 
 	static registerProvider(provider: ToolProvider): void {
 		this.providers.set(provider.id, provider);
+		const set = new Set<string>();
 		for (const tool of provider.getTools()) {
 			this.registerTool(tool);
+			set.add(tool.id);
 		}
+		this.providerTools.set(provider.id, set);
 	}
 
-	static unregisterProvider(id: string): void {
+	static unregisterProvider(providerOrId: string | ToolProvider): void {
+		const id = typeof providerOrId === 'string' ? providerOrId : providerOrId.id;
+		// Remove provider entry
 		this.providers.delete(id);
-		// Optionally: remove all tools from this provider
-		// (requires tracking which tool belongs to which provider)
+		// Unregister any tools that were registered by this provider
+		const set = this.providerTools.get(id);
+		if (set) {
+			for (const tid of set) {
+				this.unregisterTool(tid);
+			}
+			this.providerTools.delete(id);
+		}
 	}
 }

@@ -1,16 +1,39 @@
-import { AIProvider, AIModelInfo } from './AIProvider';
+import { AIProvider, AIModelInfo, NormalizedMcpClient } from './AIProvider';
 import { MCPProvider } from './MCPProvider';
 
 export class ProviderRegistry {
   private providers: AIProvider[] = [];
+  private mcpClients: Array<NormalizedMcpClient> = [];
 
-  constructor() {
+  constructor(mcpClients?: Array<NormalizedMcpClient>) {
     // Register MCPProvider by default (endpoint and apiKey can be made configurable)
     this.register(new MCPProvider());
+    if (mcpClients && mcpClients.length > 0) {
+      this.mcpClients = mcpClients;
+      // Inject MCP clients into already-registered providers
+      for (const p of this.providers) {
+        if (typeof p.setMcpClients === 'function') {
+          try { p.setMcpClients(this.mcpClients); } catch (e) { /* ignore */ }
+        }
+      }
+    }
   }
 
   register(provider: AIProvider) {
     this.providers.push(provider);
+    // Inject current MCP clients if provider supports it
+    if (this.mcpClients.length > 0 && typeof provider.setMcpClients === 'function') {
+      try { provider.setMcpClients(this.mcpClients); } catch (e) { /* ignore errors */ }
+    }
+  }
+
+  setMcpClients(clients: Array<NormalizedMcpClient>) {
+    this.mcpClients = clients || [];
+    for (const p of this.providers) {
+      if (typeof p.setMcpClients === 'function') {
+        try { p.setMcpClients(this.mcpClients); } catch (e) { /* ignore */ }
+      }
+    }
   }
 
   getProviders(): AIProvider[] {
